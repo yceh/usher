@@ -75,7 +75,8 @@ else()
     add_executable(usher
         src/mutation_annotated_tree.cpp
         src/usher_mapper.cpp
-        src/Fitch_Sankoff.cpp
+        src/tree_rearrangements/Fitch_Sankoff.cpp
+        src/tree_rearrangements/tree_rearrangement.cpp
         src/check_samples.cpp
         src/tree_rearrangement.cpp
         src/NNI.cpp

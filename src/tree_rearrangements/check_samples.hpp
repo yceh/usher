@@ -1,4 +1,4 @@
-#include "mutation_annotated_tree.hpp"
+#include "../mutation_annotated_tree.hpp"
 #include <cstdio>
 #include <unordered_map>
 #include <unordered_set>

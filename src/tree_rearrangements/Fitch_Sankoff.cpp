@@ -1,4 +1,3 @@
-#include "mutation_annotated_tree.hpp"
 #include <array>
 #include <limits.h>
 #include <string>
@@ -70,8 +69,8 @@ static void set_internal_score(const MAT::Node &this_node, Scores_Type &out,
             size_t child_idx = start_idx - child->index;
             // make sure indexes match
             assert(child_idx <= out.size() - 2);
-            assert(out[child_idx].node == child);
-            assert(states[child_idx].node == child);
+            //assert(out[child_idx].node == child);
+            //assert(states[child_idx].node == child);
             // Make sure child values are computed
             assert(out[child_idx][0] != -1);
 
@@ -84,7 +83,7 @@ static void set_internal_score(const MAT::Node &this_node, Scores_Type &out,
         if(is_sample&&((ori_state&(1<<par_nuc))==0)){
             score++;
         }
-        assert(out.back().node == &this_node);
+        //assert(out.back().node == &this_node);
         out.back()[par_nuc] = score;
     }
 }
@@ -126,17 +125,17 @@ void Fitch_Sankoff::sankoff_backward_pass(const std::pair<size_t, size_t> &range
     auto ori_state_iter=original_state.rbegin();
     for (auto iter = dfs_ordered_nodes.begin() + range.second-1;
          iter >= dfs_ordered_nodes.begin() + range.first; iter--) {
-#ifndef NDEBUG
-        scores.emplace_back(*iter);
-#else
+//#ifndef NDEBUG
+//        scores.emplace_back(*iter);
+//#else
         scores.emplace_back();
-#endif
+//#endif
 
-#ifndef NDEBUG
-        states.emplace_back(*iter);
-#else
+//#ifndef NDEBUG
+//        states.emplace_back(*iter);
+//#else
         states.emplace_back(0);
-#endif
+//#endif
 
         Score_Type& score_array = scores.back();
         if ((*iter)->is_leaf()) {
@@ -196,9 +195,9 @@ void Fitch_Sankoff::sankoff_forward_pass(const std::pair<size_t, size_t> &range,
                           States_Type &states,
                           std::vector<MAT::Node *> &dfs_ordered_nodes,const MAT::Mutation &mutation,char ancestor_state,std::vector<char> original_state,std::unordered_map<MAT::Node*, MAT::Node*>& new_internal_map,
                           MAT::Tree& tree
-#ifndef NDEBUG
-,Scores_Type &child_scores 
-#endif
+//#ifndef NDEBUG
+//,Scores_Type &child_scores 
+//#endif
 ) {
     //first node->last element
     //index=size-1-(dfs_index-first_element_index)
@@ -210,10 +209,10 @@ void Fitch_Sankoff::sankoff_forward_pass(const std::pair<size_t, size_t> &range,
     for (size_t dfs_idx=range.first+1; dfs_idx<range.second; dfs_idx++) {
         auto this_node=dfs_ordered_nodes[dfs_idx];
         size_t state_idx=offset-dfs_idx;
-        assert(this_node==states[state_idx].node);
+        //assert(this_node==states[state_idx].node);
 
         size_t parent_state_idx=offset-this_node->parent->index;
-        assert(states[parent_state_idx].node==this_node->parent);
+        //assert(states[parent_state_idx].node==this_node->parent);
         char parent_state=states[parent_state_idx];
         assert(parent_state<4);
         
@@ -223,7 +222,7 @@ void Fitch_Sankoff::sankoff_forward_pass(const std::pair<size_t, size_t> &range,
         }
         
         char this_state=3&(states[state_idx]>>(2*parent_state));
-        assert(this_state==get_child_score_on_par_nuc(parent_state, child_scores[state_idx]).second);
+        //assert(this_state==get_child_score_on_par_nuc(parent_state, child_scores[state_idx]).second);
         
         states[state_idx]=this_state;
         set_mutation(this_node, 1<<this_state, 1<<parent_state, mutation,new_internal_map,tree,original_state[dfs_idx-range.first]);

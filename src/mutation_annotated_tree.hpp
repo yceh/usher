@@ -81,6 +81,11 @@ namespace Mutation_Annotated_Tree {
     class Mutations_Collection{
         std::vector<Mutation> mutations;
         public:
+        static const char NO_DUPLICATE=-1;
+        static const char KEEP_SELF=1;
+        static const char KEEP_OTHER=0;
+        static const char MERGE=2;
+        static const char INVERT_MERGE=3;
         typedef std::vector<Mutation>::iterator iterator;
         size_t size() const {return mutations.size();}
         void swap(Mutations_Collection& in){
@@ -129,6 +134,17 @@ namespace Mutation_Annotated_Tree {
             return iter;
         }
         
+        Mutations_Collection reverse() const{
+            Mutations_Collection result;
+            result.mutations.reserve(mutations.size());
+            for(Mutation m:mutations){
+                auto t=m.mut_nuc;
+                m.mut_nuc=m.par_nuc;
+                m.par_nuc=t;
+                result.mutations.push_back(m);
+            }
+            return result;
+        }
         iterator find(const Mutation& mut) {
             return find(mut.position);
         }
@@ -144,7 +160,7 @@ namespace Mutation_Annotated_Tree {
          * @brief Merge other mutations into this mutation set
          * 
          * @param other sorted vector of mutations to merge in
-         * @param keep_self if two mutations are at the same position 0: keep other, 1: keep self, -1: impossible, throw an error.
+         * @param keep_self if two mutations are at the same position 0: keep other, 1: keep self, -1: impossible, throw an error. 2: Merge as successor, 3. Inverted merge
          */
         void merge_out(const Mutations_Collection& other,Mutations_Collection& out, char keep_self) const{
 //used for checking whether the two vectors are sorted while merging
@@ -162,6 +178,11 @@ last_pos_inserted=(newly_inserted);
                 while (other_iter != other.mutations.end()&&other_iter->position<this_mutation.position) {
                     mutation_vector_check_order(other_iter->position);
                     out.mutations.push_back(*other_iter);
+                    if(keep_self==INVERT_MERGE){
+                        auto temp=out.mutations.back().mut_nuc;
+                        out.mutations.back().mut_nuc=out.mutations.back().par_nuc;
+                        out.mutations.back().par_nuc=temp;
+                    }
                     other_iter++;
                 }
                 if (other_iter==other.mutations.end()||
@@ -172,11 +193,24 @@ last_pos_inserted=(newly_inserted);
                     mutation_vector_check_order(this_mutation.position);
 
                     assert(this_mutation.position==other_iter->position);
-                    assert(keep_self!=-1);
-                    if (keep_self) {
-                        out.mutations.push_back(this_mutation);
-                    }else {
-                        out.mutations.push_back(*other_iter);
+                    switch(keep_self){
+                        case NO_DUPLICATE: assert(false);
+                        case KEEP_OTHER: out.mutations.push_back(*other_iter); break;
+                        case KEEP_SELF:out.mutations.push_back(this_mutation); break;
+                        case MERGE:assert(other_iter->par_nuc==this_mutation.mut_nuc);
+                            if(other_iter->mut_nuc!=this_mutation.ref_nuc){
+                                out.mutations.push_back(*other_iter);
+                                out.mutations.back().par_nuc=this_mutation.par_nuc;
+                            }
+                            break;
+                        default:
+                            assert(keep_self==INVERT_MERGE);
+                            assert(other_iter->mut_nuc==this_mutation.mut_nuc);
+                            if(other_iter->par_nuc!=this_mutation.ref_nuc){
+                                out.mutations.push_back(this_mutation);
+                                out.mutations.back().mut_nuc=other_iter->par_nuc;
+                            }
+                            break;
                     }
                     other_iter++;
                 }
