@@ -367,7 +367,6 @@ last_pos_inserted=(newly_inserted);
             std::unordered_map <std::string, Node*> all_nodes;
         public:
             Tree() {
-                max_level = 0;
                 root = NULL;
                 all_nodes.clear();
             }
@@ -375,6 +374,7 @@ last_pos_inserted=(newly_inserted);
             Tree (Node* n);
             std::vector<Node*> new_nodes;
             size_t max_level;
+
             Node* root;
             std::unordered_map<std::string, std::vector<std::string>> condensed_nodes;
             std::unordered_set<std::string> condensed_leaves;
@@ -385,7 +385,7 @@ last_pos_inserted=(newly_inserted);
             std::vector<Node*> get_leaves(std::string nid="");
             std::vector<std::string> get_leaves_ids(std::string nid="");
             size_t get_num_leaves(Node* node=NULL);
-            void create_node (std::string identifier, float branch_length = -1.0);
+            Node* create_node (std::string identifier, float branch_length = -1.0);
             Node* create_node (std::string identifier, std::string parent_id, float branch_length = -1.0);
             Node* get_node (std::string identifier);
             bool is_ancestor (std::string anc_id, std::string nid);
@@ -401,8 +401,8 @@ last_pos_inserted=(newly_inserted);
             void collapse_tree();
     };
     
-    std::string get_newick_string(Tree& T, bool b1, bool b2, bool b3=false);
-    std::string get_newick_string(Tree& T, Node* node, bool b1, bool b2, bool b3=false);
+    std::string get_newick_string(Tree& T, bool b1, bool b2, bool b3=false, bool b4=false);
+    std::string get_newick_string(Tree& T, Node* node, bool b1, bool b2, bool b3=false, bool b4=false);
     Tree create_tree_from_newick (std::string filename);
     Tree create_tree_from_newick_string (std::string newick_string);
     void string_split(std::string s, char delim, std::vector<std::string>& words);
@@ -410,8 +410,8 @@ last_pos_inserted=(newly_inserted);
 
     Tree load_mutation_annotated_tree (std::string filename);
     void save_mutation_annotated_tree (Tree tree, std::string filename);
+    Tree get_tree_copy(Tree tree, std::string identifier="");
 
-    Tree get_tree_copy(Tree tree);
     // Exchange 2 branches of the same tree that are not root (not checked to be the same tree)
     void exchange(Node*  branch1, Node* branch2);
 }

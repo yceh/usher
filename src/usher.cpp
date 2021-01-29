@@ -200,6 +200,8 @@ int main(int argc, char** argv) {
     // using the sample variants in the input VCF file. If the VCF contains
     // samples missing in the input tree, they get added to missing_samples
     if (tree_filename != "") {
+        fprintf(stderr, "Loading input tree and vcf file.\n"); 
+        timer.Start();
         // Create a new tree from the input newick file and store it in
         // optimal_trees
         auto tmp_T = MAT::create_tree_from_newick(tree_filename);
@@ -231,6 +233,8 @@ int main(int argc, char** argv) {
         catch(const boost::iostreams::gzip_error& e) {
             std::cout << e.what() << '\n';
         }
+        
+        fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
 
         fprintf(stderr, "Computing parsimonious assignments for input variants.\n"); 
         timer.Start();
@@ -541,7 +545,10 @@ int main(int argc, char** argv) {
                     }
 
                     size_t best_node_num_leaves = 0;
-                    int best_set_difference = 1e9;
+                    // The maximum number of mutations is bound by the number
+                    // of mutations in the missing sample (place at root)
+                    int best_set_difference = missing_sample_mutations[s].size();
+
                     size_t best_j = 0;
                     size_t num_best = 1;
                     bool best_node_has_unique = false;
@@ -662,7 +669,9 @@ int main(int argc, char** argv) {
                 }
 
                 size_t best_node_num_leaves = 0;
-                int best_set_difference = 1e9;
+                // The maximum number of mutations is bound by the number
+                // of mutations in the missing sample (place at root)
+                int best_set_difference = missing_sample_mutations[s].size();
                 
                 size_t best_j = 0;
                 bool best_node_has_unique = false;
@@ -1038,31 +1047,6 @@ int main(int argc, char** argv) {
     }
 
 
-    // Write final tree(s) to file(s)
-    for (size_t t_idx = 0; t_idx < num_trees; t_idx++) {
-        timer.Start();
-            
-        T = &optimal_trees[t_idx];
-        
-        auto final_tree_filename = outdir + "/final-tree.nh";
-        if (num_trees > 1) {
-            final_tree_filename = outdir + "/final-tree-" + std::to_string(t_idx+1) + ".nh";
-            fprintf(stderr, "Writing final tree %zu to file %s \n", t_idx+1, final_tree_filename.c_str());
-        }
-        else {
-            fprintf(stderr, "Writing final tree to file %s \n", final_tree_filename.c_str());
-        }
-        auto parsimony_score = T->get_parsimony_score();
-        fprintf(stderr, "The parsimony score for this tree is: %zu \n", parsimony_score);
-        FILE* final_tree_file = fopen(final_tree_filename.c_str(), "w");
-        fprintf(final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len).c_str());
-        fclose(final_tree_file);
-
-        tree_parsimony_scores.emplace_back(parsimony_score);
-        
-        fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
-    }
-
     // If user need uncondensed tree output, write uncondensed tree(s) to
     // file(s)
     if (print_uncondensed_tree) {
@@ -1081,16 +1065,36 @@ int main(int argc, char** argv) {
             }
 
             FILE* uncondensed_final_tree_file = fopen(uncondensed_final_tree_filename.c_str(), "w");
+                
+            fprintf(uncondensed_final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len, true).c_str());
 
-            if (T->condensed_nodes.size() > 0) {
-                MAT::Tree T_to_print = MAT::get_tree_copy(*T);
-                T_to_print.uncondense_leaves();
-                fprintf(uncondensed_final_tree_file, "%s\n", MAT::get_newick_string(T_to_print, true, true, retain_original_branch_len).c_str());
+            fclose(uncondensed_final_tree_file);
+
+            fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
+        }
+    }
+    else {
+        // Write final tree(s) to file(s)
+        for (size_t t_idx = 0; t_idx < num_trees; t_idx++) {
+            timer.Start();
+
+            T = &optimal_trees[t_idx];
+
+            auto final_tree_filename = outdir + "/final-tree.nh";
+            if (num_trees > 1) {
+                final_tree_filename = outdir + "/final-tree-" + std::to_string(t_idx+1) + ".nh";
+                fprintf(stderr, "Writing final tree %zu to file %s \n", t_idx+1, final_tree_filename.c_str());
             }
             else {
-                fprintf(uncondensed_final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len).c_str());
+                fprintf(stderr, "Writing final tree to file %s \n", final_tree_filename.c_str());
             }
-            fclose(uncondensed_final_tree_file);
+            auto parsimony_score = T->get_parsimony_score();
+            fprintf(stderr, "The parsimony score for this tree is: %zu \n", parsimony_score);
+            FILE* final_tree_file = fopen(final_tree_filename.c_str(), "w");
+            fprintf(final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len).c_str());
+            fclose(final_tree_file);
+
+            tree_parsimony_scores.emplace_back(parsimony_score);
 
             fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
         }
