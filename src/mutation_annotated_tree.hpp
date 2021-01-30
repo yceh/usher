@@ -18,6 +18,8 @@
 #include <tbb/blocked_range.h>
 #include <tbb/tbb.h>
 #include "parsimony.pb.h"
+static char one_hot_to_two_bit(char arg) {return 31-__builtin_clz((unsigned int)arg);}
+static char two_bit_to_one_hot(char arg) {return 1<<(arg);}
 namespace Mutation_Annotated_Tree {
     int8_t get_nuc_id (char nuc);
     int8_t get_nuc_id (std::vector<int8_t> nuc_vec);
@@ -105,6 +107,13 @@ namespace Mutation_Annotated_Tree {
         }
         void clear(){
             mutations.clear();
+        }
+        void reserve(size_t n){
+            mutations.reserve(n);
+        }
+        void push_back(Mutation& m){
+            assert(m.position>mutations.back().position);
+            mutations.push_back(m);
         }
         iterator find_next( int pos) {
             #ifndef NDEBUG

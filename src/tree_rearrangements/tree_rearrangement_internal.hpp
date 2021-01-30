@@ -6,11 +6,14 @@
 #include <tbb/pipeline.h>
 #include <unordered_map>
 #include <vector>
+
 /* Enumerater Nodes -(Node*)->  Find neighbors and positions to do fitch-sankoff -(Possible_Moves*)-> do fitch-sankoff -(Possible_Moves*)->  estimate profit of moves -(Profitable_Moves*)-> apply moves*/
 //======================Message types========================
 struct Fitch_Sankoff_Result{
     int pos;
+    int original_tip_score;
     Fitch_Sankoff::Score_Type tip_score;
+    std::vector<char> original_state;
     Fitch_Sankoff::States_Type states;
 };
 
@@ -19,10 +22,18 @@ struct Dst_Mut{
     MAT::Mutations_Collection mut;
 };
 
+struct Fitch_Sankoff_Shared{
+    std::pair<size_t, size_t> range;
+};
+
 struct Possible_Moves{
     MAT::Node* src;
     std::vector<Dst_Mut> dst;
-    std::unordered_map<int, Fitch_Sankoff_Result> src_tip_fs_result;
+    Fitch_Sankoff_Shared shared;
+    union{
+        MAT::Mutations_Collection* to_search;
+        std::unordered_map<int, Fitch_Sankoff_Result>* src_tip_fs_result;
+    };
 };
 
 struct Merge_Discriptor{
@@ -33,15 +44,15 @@ struct Merge_Discriptor{
 };
 struct Move{
     MAT::Node* dst;
-    int score_change;
     std::vector<std::pair<int,Fitch_Sankoff::States_Type>> states;
-    
+    Mutation_Annotated_Tree::Mutations_Collection new_tip_mutations;
     //The child of its new parent that shares mutation, null if none
-    Merge_Discriptor* merger;
+    std::vector<Merge_Discriptor*> merger;
 
 };
 
 struct Profitable_Moves{
+    int score_change;
     MAT::Node* src;
     std::vector<Move> moves;
 };
@@ -66,6 +77,7 @@ extern tbb::concurrent_hash_map<MAT::Node*, MAT::Node*> potential_crosses;
 /* If a child of node has mutation that the node is considering, it will lead to inaccurate parsimony score calculation, but will only be off by one.*/
 extern tbb::concurrent_hash_map<MAT::Node*, tbb::concurrent_vector<int>> repeatedly_mutating_loci;
 
+extern tbb::concurrent_vector<MAT::Node*> postponed;
 
 
 //===========================Functors for implementing the pipeline=====================
@@ -90,17 +102,23 @@ struct Neighbors_Finder{
 };
 
 struct Parsimony_Score_Calculator{
+    std::vector<MAT::Node *>& dfs_ordered_nodes;
+    Parsimony_Score_Calculator(std::vector<MAT::Node *>& dfs_ordered_nodes):dfs_ordered_nodes(dfs_ordered_nodes){}
     Possible_Moves* operator()(Possible_Moves*)const;
 };
 
 struct Profitable_Moves_Enumerator{
+    std::vector<MAT::Node *>& dfs_ordered_nodes;
+    Profitable_Moves_Enumerator(std::vector<MAT::Node *>& dfs_ordered_nodes):dfs_ordered_nodes(dfs_ordered_nodes){}
     Profitable_Moves* operator() (Possible_Moves*)const;
 };
 
 
 struct Move_Executor{
     std::vector<ConfirmedMove>& moves;
-    Move_Executor(std::vector<ConfirmedMove>& moves):moves(moves){}
+    std::vector<MAT::Node *>& dfs_ordered_nodes;
+    MAT::Tree* tree;
+    Move_Executor(std::vector<ConfirmedMove>& moves,std::vector<MAT::Node *>& dfs_ordered_nodes,MAT::Tree* tree):moves(moves),dfs_ordered_nodes(dfs_ordered_nodes),tree(tree){}
     void operator()(Profitable_Moves*)const;
 };
 

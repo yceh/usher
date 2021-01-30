@@ -12,13 +12,14 @@ static MAT::Mutation reverse_mutation(MAT::Mutation to_reverse) {
 }
 
 
-static void BFS(MAT::Node* src,MAT::Node* excluded, int radius,std::vector<Dst_Mut>& out,std::unordered_map<int, Fitch_Sankoff_Result>& pos_set){
+static MAT::Mutations_Collection* BFS(MAT::Node* src,MAT::Node* excluded, int radius,std::vector<Dst_Mut>& out){
     struct queue_content{
         MAT::Node* node;
         MAT::Node* reached_from; //take advantage of the tree, no loops
         int dist;
         MAT::Mutations_Collection& mutations;
     };
+    MAT::Mutations_Collection* to_search=new MAT::Mutations_Collection;
     std::queue<queue_content> bfs_queue;
     MAT::Mutations_Collection empty;
     bfs_queue.push({src,excluded,radius,empty});
@@ -28,9 +29,7 @@ MAT::Mutations_Collection mutation_path;\
 mutations.merge_out(node->mutations, mutation_path,flag);\
 out.push_back({node,mutation_path});\
 bfs_queue.push({node,src,dist,mutation_path});\
-for(const MAT::Mutation& m:node->mutations){\
-    pos_set.emplace(m.position,Fitch_Sankoff_Result());\
-}
+to_search->merge(node->mutations, 1);
 
     while (!bfs_queue.empty()) {
         MAT::Node* src=bfs_queue.front().node;
@@ -49,17 +48,19 @@ for(const MAT::Mutation& m:node->mutations){\
             bfs_add_node(c, MAT::Mutations_Collection::MERGE);
         }
     }
+    
 }
 Possible_Moves* Neighbors_Finder::operator()(MAT::Node* src)const{
     Possible_Moves* result=new Possible_Moves;
     result->src=src;
-    BFS(src->parent,src,radius,result->dst,result->src_tip_fs_result);
+    result->to_search=BFS(src->parent,src,radius,result->dst);
     
     tbb::concurrent_hash_map<MAT::Node*, tbb::concurrent_vector<int>>::const_accessor temp;
     bool search_pos=repeatedly_mutating_loci.find(temp,src);
     if(search_pos){
         for(int pos:temp->second){
-            if(result->src_tip_fs_result.find(pos)!=result->src_tip_fs_result.end()){
+            if(result->to_search->find(pos)!=result->to_search->end()){
+                postponed.push_back(src);
                 return nullptr;
             }
         }

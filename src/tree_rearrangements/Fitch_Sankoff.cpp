@@ -4,6 +4,7 @@
 #include <utility>
 #include <vector>
 #include "Fitch_Sankoff.hpp"
+#include "src/mutation_annotated_tree.hpp"
 
 typedef Fitch_Sankoff::Score_Type Score_Type;
 typedef Fitch_Sankoff::Scores_Type Scores_Type;
@@ -34,7 +35,7 @@ static void fill_nuc(char nuc, Score_Type &out,State_Type& state) {
 }
 static void set_leaf_score(MAT::Node &this_node, const MAT::Mutation &pos,
                            Score_Type &out,State_Type& state,char ori_state) {
-    assert(out.node==&this_node);
+    //assert(out.node==&this_node);
     assert(ori_state==get_genotype(&this_node, pos));
     fill_nuc(ori_state, out,state);
 }
@@ -112,7 +113,7 @@ std::pair<size_t, size_t> Fitch_Sankoff::dfs_range(const MAT::Node *start,std::v
     return std::make_pair(start_idx, stop_idx);
 }
 
-void Fitch_Sankoff::sankoff_backward_pass(const std::pair<size_t, size_t> &range,
+int Fitch_Sankoff::sankoff_backward_pass(const std::pair<size_t, size_t> &range,
                            const MAT::Mutation &mutation,
                            const std::vector<MAT::Node *> &dfs_ordered_nodes,
                            Scores_Type &scores, States_Type &states,std::vector<char> original_state) {
@@ -147,6 +148,7 @@ void Fitch_Sankoff::sankoff_backward_pass(const std::pair<size_t, size_t> &range
     }
     assert(scores.size()== (range.second - range.first));
     assert(scores.size() == states.size());
+    return get_child_score_on_par_nuc(one_hot_to_two_bit(original_state.front()), scores.back()).first;
 }
 static MAT::Node* splay(MAT::Node* to_splay,MAT::Tree& tree){
     std::string old_name=to_splay->identifier;
@@ -203,7 +205,7 @@ void Fitch_Sankoff::sankoff_forward_pass(const std::pair<size_t, size_t> &range,
     //index=size-1-(dfs_index-first_element_index)
     size_t offset=states.size()-1+range.first;
     //set the state of first node
-    assert(dfs_ordered_nodes[range.first]==states.back().node);
+    //assert(dfs_ordered_nodes[range.first]==states.back().node);
     set_mutation(dfs_ordered_nodes[range.first],1<<states.back(),ancestor_state,mutation,new_internal_map,tree,original_state[0]);
     //for the rest
     for (size_t dfs_idx=range.first+1; dfs_idx<range.second; dfs_idx++) {
