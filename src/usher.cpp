@@ -17,7 +17,6 @@ namespace po = boost::program_options;
 namespace MAT = Mutation_Annotated_Tree;
 
 int main(int argc, char** argv) {
-
     //Variables to load command-line options using Boost program_options
     std::string tree_filename;
     std::string din_filename;
@@ -547,7 +546,11 @@ int main(int argc, char** argv) {
                     size_t best_node_num_leaves = 0;
                     // The maximum number of mutations is bound by the number
                     // of mutations in the missing sample (place at root)
-                    int best_set_difference = missing_sample_mutations[s].size();
+                    //int best_set_difference = 1e9;
+                    // TODO: currently number of root mutations is also added to
+                    // this value since it forces placement as child but this
+                    // could be changed later 
+                    int best_set_difference = missing_sample_mutations[s].size() + T->root->mutations.size() + 1;
 
                     size_t best_j = 0;
                     size_t num_best = 1;
@@ -560,8 +563,8 @@ int main(int argc, char** argv) {
 
                     // Parallel for loop to search for most parsimonious
                     // placements. Real action happens within mapper2_body
-                    auto grain_size = 400; 
-                    tbb::parallel_for( tbb::blocked_range<size_t>(0, total_nodes, grain_size),
+                    static tbb::affinity_partitioner ap;
+                    tbb::parallel_for( tbb::blocked_range<size_t>(0, total_nodes),
                             [&](tbb::blocked_range<size_t> r) {
                             for (size_t k=r.begin(); k<r.end(); ++k){
                                 mapper2_input inp;
@@ -582,7 +585,7 @@ int main(int argc, char** argv) {
 
                                 mapper2_body(inp, false);
                             }       
-                    }); 
+                    }, ap); 
 
                     best_parsimony_scores.emplace_back(best_set_difference);
                     num_best_placements.emplace_back(num_best);
@@ -671,7 +674,11 @@ int main(int argc, char** argv) {
                 size_t best_node_num_leaves = 0;
                 // The maximum number of mutations is bound by the number
                 // of mutations in the missing sample (place at root)
-                int best_set_difference = missing_sample_mutations[s].size();
+                //int best_set_difference = 1e9;
+                // TODO: currently number of root mutations is also added to
+                // this value since it forces placement as child but this
+                // could be changed later 
+                int best_set_difference = missing_sample_mutations[s].size() + T->root->mutations.size() + 1;
                 
                 size_t best_j = 0;
                 bool best_node_has_unique = false;
@@ -685,8 +692,8 @@ int main(int argc, char** argv) {
 
                 // Parallel for loop to search for most parsimonious
                 // placements. Real action happens within mapper2_body
-                auto grain_size = 400; 
-                tbb::parallel_for( tbb::blocked_range<size_t>(0, total_nodes, grain_size),
+                static tbb::affinity_partitioner ap;
+                tbb::parallel_for( tbb::blocked_range<size_t>(0, total_nodes),
                         [&](tbb::blocked_range<size_t> r) {
                         for (size_t k=r.begin(); k<r.end(); ++k){
                         mapper2_input inp;
@@ -711,7 +718,7 @@ int main(int argc, char** argv) {
 
                         mapper2_body(inp, print_parsimony_scores);
                         }       
-                        }); 
+                        }, ap); 
 
                 if (!print_parsimony_scores) {
                     fprintf(stderr, "Current tree size (#nodes): %zu\tSample name: %s\tParsimony score: %d\tNumber of parsimony-optimal placements: %zu\n", total_nodes, sample.c_str(), \
@@ -1064,11 +1071,16 @@ int main(int argc, char** argv) {
                 fprintf(stderr, "Writing uncondensed final tree to file %s \n", uncondensed_final_tree_filename.c_str());
             }
 
-            FILE* uncondensed_final_tree_file = fopen(uncondensed_final_tree_filename.c_str(), "w");
+            //FILE* uncondensed_final_tree_file = fopen(uncondensed_final_tree_filename.c_str(), "w");
                 
-            fprintf(uncondensed_final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len, true).c_str());
+            //fprintf(uncondensed_final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len, true).c_str());
 
-            fclose(uncondensed_final_tree_file);
+            //fclose(uncondensed_final_tree_file);
+            std::ofstream uncondensed_final_tree_file(uncondensed_final_tree_filename.c_str(), std::ofstream::out);
+            std::stringstream newick_ss;
+            write_newick_string(newick_ss, *T, T->root, true, true, retain_original_branch_len, true);
+            uncondensed_final_tree_file << newick_ss.rdbuf(); 
+            uncondensed_final_tree_file.close();
 
             fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
         }
@@ -1090,9 +1102,14 @@ int main(int argc, char** argv) {
             }
             auto parsimony_score = T->get_parsimony_score();
             fprintf(stderr, "The parsimony score for this tree is: %zu \n", parsimony_score);
-            FILE* final_tree_file = fopen(final_tree_filename.c_str(), "w");
-            fprintf(final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len).c_str());
-            fclose(final_tree_file);
+            //FILE* final_tree_file = fopen(final_tree_filename.c_str(), "w");
+            //fprintf(final_tree_file, "%s\n", MAT::get_newick_string(*T, true, true, retain_original_branch_len).c_str());
+            //fclose(final_tree_file);
+            std::ofstream final_tree_file(final_tree_filename.c_str(), std::ofstream::out);
+            std::stringstream newick_ss;
+            write_newick_string(newick_ss, *T, T->root, true, true, retain_original_branch_len);
+            final_tree_file << newick_ss.rdbuf(); 
+            final_tree_file.close();
 
             tree_parsimony_scores.emplace_back(parsimony_score);
 
@@ -1285,7 +1302,7 @@ int main(int argc, char** argv) {
                             }
                         }
 
-                        newick = MAT::get_newick_string(new_T, true, true, retain_original_branch_len);
+                        //newick = MAT::get_newick_string(new_T, true, true, retain_original_branch_len);
                     }
 
                     tbb::parallel_for (tbb::blocked_range<size_t>(i+1, missing_samples.size(), 100),
@@ -1308,9 +1325,15 @@ int main(int argc, char** argv) {
                         subtree_filename = outdir + "/" + "tree-" + std::to_string(t_idx+1) + "-subtree-" + std::to_string(num_subtrees) + ".nh";
                     }
                     fprintf(stderr, "Writing subtree %d to file %s.\n", num_subtrees, subtree_filename.c_str());
-                    FILE* subtree_file = fopen(subtree_filename.c_str(), "w");
-                    fprintf(subtree_file, "%s\n", newick.c_str());
-                    fclose(subtree_file);
+                    //FILE* subtree_file = fopen(subtree_filename.c_str(), "w");
+                    //fprintf(subtree_file, "%s\n", newick.c_str());
+                    //fclose(subtree_file);
+                    std::ofstream subtree_file(subtree_filename.c_str(), std::ofstream::out);
+                    std::stringstream newick_ss;
+                    write_newick_string(newick_ss, new_T, new_T.root, true, true, retain_original_branch_len);
+                    subtree_file << newick_ss.rdbuf(); 
+                    subtree_file.close();
+
 
                     // Write list of mutations on the subtree to file
                     auto subtree_mutations_filename = outdir + "/subtree-" + std::to_string(num_subtrees) + "-mutations.txt";
@@ -1393,7 +1416,7 @@ int main(int argc, char** argv) {
 
         timer.Start();
 
-        fprintf(stderr, "Saving mutation-annotated tree object to file %s\n", dout_filename.c_str());
+        fprintf(stderr, "Saving mutation-annotated tree object to file (after condensing identical sequences) %s\n", dout_filename.c_str());
         if (num_trees > 1) {
             fprintf(stderr, "WARNING: --multiple-placements option was used but only the first mutation-annotated tree object will be saved to file.\n");
         }
@@ -1401,6 +1424,11 @@ int main(int argc, char** argv) {
         Parsimony::data data;
 
         T = &optimal_trees[0];
+        // Recondense tree with new samples
+        if (T->condensed_nodes.size() > 0) {
+            T->uncondense_leaves();
+        }
+        T->condense_leaves();
         MAT::save_mutation_annotated_tree(*T, dout_filename);
         
         fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
