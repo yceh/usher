@@ -1,6 +1,7 @@
 #ifndef MUTATION_ANNOTATED_TREE
 #define MUTATION_ANNOTATED_TREE
 #include <algorithm>
+#include <bits/stdint-uintn.h>
 #include <cstddef>
 #include <mutex>
 #include <sys/types.h>
@@ -90,11 +91,12 @@ namespace Mutation_Annotated_Tree {
     // WARNING: chrom is currently ignored!
     // position < 0 implies masked mutations i.e. mutations that exist but
     // details are unknown
-    class Mutation;
+    struct Valid_Mutation;
     class Mutation {
         #ifdef LOAD
         public:
         #endif
+        friend Valid_Mutation;
         int position;
         uint8_t chrom_idx;
         uint8_t par_mut_nuc;
@@ -222,6 +224,36 @@ namespace Mutation_Annotated_Tree {
             else {
                 return get_nuc(get_par_one_hot()) + std::to_string(position) + get_nuc(get_mut_one_hot());
             }
+        }
+    };
+    struct Valid_Mutation{
+        int position;
+        uint8_t chrom_idx;
+        uint8_t par_mut_nuc;
+        uint8_t allele_present_among_descendents;
+        uint8_t flags;
+        Valid_Mutation(){}
+        Valid_Mutation(const Mutation& mut){
+            assert(mut.is_valid());
+            position=mut.position;
+            chrom_idx=mut.chrom_idx;
+            par_mut_nuc=mut.par_mut_nuc;
+        }
+        nuc_one_hot get_mut_one_hot() const{
+            return par_mut_nuc&0xf;
+        }
+        nuc_one_hot get_par_one_hot() const{
+            return par_mut_nuc>>4;
+        }
+        int get_position() const{
+            return position;
+        }
+        void set_mut_one_hot(nuc_one_hot new_mut) {
+            par_mut_nuc&=0xf0;
+            par_mut_nuc|=new_mut;
+        }
+        nuc_one_hot get_ref_one_hot() const{
+            return Mutation::refs[position];
         }
     };
     //Wraper of a vector of mutation, sort of like boost::flatmap
@@ -370,6 +402,7 @@ namespace Mutation_Annotated_Tree {
             Node* parent;
             std::vector<Node*> children;
             Mutations_Collection mutations;
+            std::vector<Valid_Mutation> valid_mutations;
             //Mutations_Collection boundary_mutations;
             size_t dfs_index; //index in dfs pre-order
             size_t dfs_end_index; //index in dfs pre-order

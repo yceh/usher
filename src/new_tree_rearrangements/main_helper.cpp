@@ -11,17 +11,7 @@
 #include <unordered_set>
 #include <random>
 namespace MAT=Mutation_Annotated_Tree;
-//add a root above current root, so nodes can move above the current node
-void add_root(MAT::Tree *tree) {
-    MAT::Node *old_root = tree->root;
-    MAT::Node *new_root = new MAT::Node();
-    new_root->identifier = std::to_string(++tree->curr_internal_node);
-    std::string &node_name = new_root->identifier;
-    new_root->children.push_back(old_root);
-    tree->all_nodes.emplace(node_name, new_root);
-    old_root->parent=new_root;
-    tree->root=new_root;
-}
+
 //Usher expect parent of condensed node have no mutation, so before outputing usher compatible protobuf,
 //add intermediate nodes to carry mutations of condensed nodes
 void fix_condensed_nodes(MAT::Tree *tree) {

@@ -153,9 +153,6 @@ static void reassign_states(MAT::Tree& t, Original_State_t& origin_states){
     std::unordered_set<std::string> ignored;
     std::unordered_set<std::string> ignored2;
     clean_up_internal_nodes(t.root,t,ignored,ignored2);
-    if (t.root->children.size()>1) {
-        add_root(&t);
-    }
     bfs_ordered_nodes = t.breadth_first_expansion();
     std::vector<tbb::concurrent_vector<Mutation_Annotated_Tree::Mutation>>
         output(bfs_ordered_nodes.size());
