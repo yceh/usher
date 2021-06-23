@@ -1,18 +1,9 @@
 #include "../Profitable_Moves_Enumerators/Profitable_Moves_Enumerators.hpp"
-#include "../mutation_annotated_tree.hpp"
 #include <mutex>
 #include <tbb/concurrent_vector.h>
 #include <tbb/task.h>
 #include <vector>
-struct placed_sample_info {
-    std::string sample_name;
-    std::vector<MAT::Valid_Mutation> mutations_relative_to_this_node;
-    placed_sample_info(
-        std::string sample_name,
-        std::vector<MAT::Valid_Mutation> mutations_relative_to_this_node)
-        : sample_name(sample_name),
-          mutations_relative_to_this_node(mutations_relative_to_this_node) {}
-};
+#include "placement.hpp"
 
 bool merged_mutation_if_continue_down(
     const MAT::Node *node, int &lower_bound, int &parsimony_score_if_split_here,
@@ -23,14 +14,16 @@ bool merged_mutation_if_continue_down(
         while (par_mut_iter && (par_mut_iter->position < mut.position)) {
             // mutations needed if placed at parent and no change
             mutations_merged.push_back(*par_mut_iter);
-            par_mut_iter++;
-            parsimony_score_if_split_here++;
-            // if none of the descendent mutation can mutate to the desired
-            // allele, increment lower bound
-            if (!(par_mut_iter->allele_present_among_descendents &
-                  par_mut_iter->get_mut_one_hot())) {
-                lower_bound++;
+            if(!(par_mut_iter->get_mut_one_hot()&par_mut_iter->get_par_one_hot())){
+                parsimony_score_if_split_here++;
+                // if none of the descendent mutation can mutate to the desired
+                // allele, increment lower bound
+                if (!(par_mut_iter->allele_present_among_descendents &
+                      par_mut_iter->get_mut_one_hot())) {
+                    lower_bound++;
+                }
             }
+            par_mut_iter++;
         }
         mutations_merged.push_back(mut);
         auto &inserted = mutations_merged.back();
@@ -42,28 +35,33 @@ bool merged_mutation_if_continue_down(
                 continue;
             } else {
                 // coincide, but split
-                parsimony_score_if_split_here++;
-                inserted.set_mut_one_hot(par_mut_iter->get_mut_one_hot());
+                inserted.set_par_mut(mut.get_mut_one_hot(),par_mut_iter->get_mut_one_hot());
                 have_not_shared=true;
                 par_mut_iter++;
             }
         } else {
-            assert(mut.get_mut_one_hot() != mut.get_ref_one_hot());
             have_not_shared=true;
-            inserted.set_mut_one_hot(mut.get_ref_one_hot());
+            inserted.set_par_mut(mut.get_mut_one_hot(),mut.get_par_one_hot());
         }
-        if (!(inserted.get_mut_one_hot() &
-              inserted.allele_present_among_descendents)) {
-            lower_bound++;
+        if(!(inserted.get_mut_one_hot()&inserted.get_par_one_hot())){
+            parsimony_score_if_split_here++;
+            if (!(inserted.get_mut_one_hot() &
+                  inserted.allele_present_among_descendents)) {
+                lower_bound++;
+            }
         }
     }
     while (par_mut_iter) {
         mutations_merged.push_back(*par_mut_iter);
         par_mut_iter++;
-        parsimony_score_if_split_here++;
-        if (!(par_mut_iter->allele_present_among_descendents &
-              par_mut_iter->get_mut_one_hot())) {
-            lower_bound++;
+        if(!(par_mut_iter->get_mut_one_hot()&par_mut_iter->get_par_one_hot())){
+            parsimony_score_if_split_here++;
+            // if none of the descendent mutation can mutate to the desired
+            // allele, increment lower bound
+            if (!(par_mut_iter->allele_present_among_descendents &
+                  par_mut_iter->get_mut_one_hot())) {
+                lower_bound++;
+            }
         }
     }
     return have_not_shared;
@@ -80,8 +78,8 @@ int parsimony_score_if_merge_with_another_children(
         }
         if (other_child_mut_iter &&
             (other_child_mut_iter->position == par_mut_iter->position)) {
-            if (other_child_mut_iter->get_mut_one_hot() !=
-                par_mut_iter->get_mut_one_hot()) {
+            if (!(other_child_mut_iter->get_mut_one_hot() &
+                par_mut_iter->get_mut_one_hot()) ){
                 to_return++;
             }
             other_child_mut_iter++;
@@ -110,7 +108,7 @@ struct placement_result_ifc {
 static int place_first_pass_helper(
     placement_result_ifc &output,
     const std::vector<MAT::Valid_Mutation> &mutations, const MAT::Node *node,
-    const std::vector<tbb::concurrent_vector<placed_sample_info>>
+    const std::vector<first_pass_per_node_t>
         &already_placed_samples,
     std::vector<MAT::Valid_Mutation> &mutations_merged) {
     int lower_bound =
@@ -158,7 +156,7 @@ static int place_first_pass_helper(
 static void place_first_pass_serial_each_level(
     placement_result_ifc &output,
     const std::vector<MAT::Valid_Mutation> &mutations, MAT::Node *node,
-    const std::vector<tbb::concurrent_vector<placed_sample_info>>
+    const std::vector<first_pass_per_node_t>
         &already_placed_samples) {
     std::vector<MAT::Valid_Mutation> mutations_merged;
     auto lower_bound = place_first_pass_helper(
@@ -180,12 +178,12 @@ struct first_pass_functor : public tbb::task {
     const MAT::Node *node;
     const std::vector<MAT::Valid_Mutation> &mutations;
     placement_result_ifc &output;
-    const std::vector<tbb::concurrent_vector<placed_sample_info>>
+    const std::vector<first_pass_per_node_t>
         &already_placed_samples;
     first_pass_functor(
         placement_result_ifc &output,
         const std::vector<MAT::Valid_Mutation> &mutations, MAT::Node *node,
-        const std::vector<tbb::concurrent_vector<placed_sample_info>>
+        const std::vector<first_pass_per_node_t>
             &already_placed_samples)
         : node(node), mutations(mutations), output(output),
           already_placed_samples(already_placed_samples) {}
@@ -230,8 +228,8 @@ struct first_pass_functor : public tbb::task {
 static void place_first_pass(
     std::string &sample_name, std::vector<MAT::Valid_Mutation> &mutations,
     MAT::Tree *tree,
-    std::vector<tbb::concurrent_vector<placed_sample_info>> &output,
-    tbb::concurrent_vector<placed_sample_info> &above_root) {
+    std::vector<first_pass_per_node_t> &output,
+    first_pass_per_node_t &above_root) {
     placement_result_ifc result;
     result.best_node = nullptr;
     result.best_score = mutations.size();

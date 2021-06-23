@@ -189,6 +189,9 @@ namespace Mutation_Annotated_Tree {
             boundary1_all_major_allele=all_major_allele|(boundary1<<4);
         }
 
+        void set_boundary1_major_allele(uint8_t boundary1_major_allele){
+            this->boundary1_all_major_allele=boundary1_major_allele;
+        }
         void set_par_mut(nuc_one_hot new_par,nuc_one_hot new_mut){
             par_mut_nuc=(new_par<<4)|new_mut;
         }
@@ -254,6 +257,9 @@ namespace Mutation_Annotated_Tree {
         }
         nuc_one_hot get_ref_one_hot() const{
             return Mutation::refs[position];
+        }
+        void set_par_mut(nuc_one_hot new_par,nuc_one_hot new_mut){
+            par_mut_nuc=(new_par<<4)|new_mut;
         }
     };
     //Wraper of a vector of mutation, sort of like boost::flatmap
