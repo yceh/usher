@@ -166,7 +166,7 @@ int mapper_body::operator()(mapper_input input) {
 // compute_parsimony_scores is not set, the function can return early if the
 // parsimony score at the current input node exceeds the smallest parsimony 
 // score encountered during the parallel search
-void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
+void mapper2_body(mapper2_input& input, bool compute_parsimony_scores, bool compute_vecs) {
     //    TIMEIT();
 
     // Variable to store the number of parsimony-increasing mutations to 
@@ -223,9 +223,11 @@ void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
                             m.mut_nuc = anc_nuc;
 
                             ancestral_mutations.emplace_back(m);
-                            anc_positions.emplace_back(m1.position);
+                            anc_positions.emplace_back(m.position);
                             assert((m.mut_nuc & (m.mut_nuc-1)) == 0);
-                            (*input.excess_mutations).emplace_back(m);
+                            if (compute_vecs) {
+                                (*input.excess_mutations).emplace_back(m);
+                            }
                             
                             // Ambiguous base
                             //if ((nuc & (nuc-1)) != 0) {
@@ -251,9 +253,11 @@ void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
                     m.mut_nuc = anc_nuc;
 
                     ancestral_mutations.emplace_back(m);
-                    anc_positions.emplace_back(m1.position);
+                    anc_positions.emplace_back(m.position);
                     assert((m.mut_nuc & (m.mut_nuc-1)) == 0);
-                    (*input.excess_mutations).emplace_back(m);
+                    if (compute_vecs) {
+                        (*input.excess_mutations).emplace_back(m);
+                    }
                     
                     num_common_mut++;
                 }
@@ -273,11 +277,14 @@ void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
     // Add ancestral mutations to ancestral mutations. When multiple mutations
     // at same position are found in the path leading from the root to the
     // current node, add only the most recent mutation to the vector
-    for (auto n: input.T->rsearch(input.node->identifier)) {
-        for (auto m: n->mutations) {
-            if (m.is_masked() || (std::find(anc_positions.begin(), anc_positions.end(), m.position) == anc_positions.end())) {
-                ancestral_mutations.emplace_back(m);
-                if (!m.is_masked()) {
+    //for (auto n: input.T->rsearch(input.node->identifier)) {
+    {
+        auto n = input.node;
+        while (n->parent != NULL) {
+            n = n->parent;
+            for (auto m: n->mutations) {
+                if (!m.is_masked() && (std::find(anc_positions.begin(), anc_positions.end(), m.position) == anc_positions.end())) {
+                    ancestral_mutations.emplace_back(m);
                     anc_positions.emplace_back(m.position);
                 }
             }
@@ -322,7 +329,7 @@ void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
             // If mutation is found in ancestral_mutations 
             // and if the missing sample base was ambiguous,
             // add it to imputed_mutations
-            if ((m1.mut_nuc & (m1.mut_nuc - 1)) != 0) {
+            if (compute_vecs && ((m1.mut_nuc & (m1.mut_nuc - 1)) != 0)) {
                 MAT::Mutation m;
                 m.chrom = m1.chrom;
                 m.position = m1.position;
@@ -338,7 +345,7 @@ void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
         // imputed_mutations for the sample (it's not a parsimony-increasing
         // mutation)
         else if (!found_pos && has_ref) {
-            if ((m1.mut_nuc & (m1.mut_nuc - 1)) != 0) {
+            if (compute_vecs && ((m1.mut_nuc & (m1.mut_nuc - 1)) != 0)) {
                 MAT::Mutation m;
                 m.chrom = m1.chrom;
                 m.position = m1.position;
@@ -372,11 +379,13 @@ void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
             assert((m.mut_nuc & (m.mut_nuc-1)) == 0);
             // If the missing sample base is ambiguous, add it to
             // imputed_mutations
-            if ((m1.mut_nuc & (m1.mut_nuc - 1)) != 0) {
+            if (compute_vecs && ((m1.mut_nuc & (m1.mut_nuc - 1)) != 0)) {
                 input.imputed_mutations->emplace_back(m);
             }
             if (m.mut_nuc != m.par_nuc) {
-                input.excess_mutations->emplace_back(m);
+                if (compute_vecs) {
+                    input.excess_mutations->emplace_back(m);
+                }
                 set_difference += 1;
                 if (!compute_parsimony_scores && (set_difference > best_set_difference)) {
                     return;
@@ -438,7 +447,9 @@ void mapper2_body(mapper2_input& input, bool compute_parsimony_scores) {
                 if (!compute_parsimony_scores && (set_difference > best_set_difference)) {
                     return;
                 }
-                (*input.excess_mutations).emplace_back(m);
+                if (compute_vecs) {
+                    (*input.excess_mutations).emplace_back(m);
+                }
             }
         }
     }

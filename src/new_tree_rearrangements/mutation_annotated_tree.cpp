@@ -58,7 +58,7 @@ static void depth_first_expansion_helper(Mutation_Annotated_Tree::Node* node, st
     assert(std::find(vec.begin(),vec.end(),node)==vec.end());
     #endif
     vec.push_back(node);
-    assert(vec.size()-1==index);
+    //assert(vec.size()-1==index);
     node->dfs_index=index;
     index++;
     for (auto c: node->children) {
@@ -93,9 +93,7 @@ size_t Mutation_Annotated_Tree::Tree::get_parsimony_score() {
 }
 
 void Mutation_Annotated_Tree::Tree::uncondense_leaves() {
-    for (size_t it = 0; it < condensed_nodes.size(); it++) {
-        auto cn = condensed_nodes.begin();
-        std::advance(cn, it);
+    for (auto cn = condensed_nodes.begin(); cn != condensed_nodes.end(); cn++) {
 
         auto n = get_node(cn->first);
         auto par = (n->parent != NULL) ? n->parent : n;

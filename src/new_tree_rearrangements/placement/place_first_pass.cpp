@@ -1,10 +1,19 @@
 #include "../Profitable_Moves_Enumerators/Profitable_Moves_Enumerators.hpp"
+#include <limits>
 #include <mutex>
 #include <tbb/concurrent_vector.h>
 #include <tbb/task.h>
 #include <vector>
 #include "placement.hpp"
 
+/**
+ * @param[in] node
+ * @param[out] lower_bound lower_bound of parsimony possible if placed at subtree rooted at node
+ * @param[out] parsimony_score_if_split_here parsimony score if placed between node and its parent
+ * @param[in] par_mut_iter Mutations if placed as child of parent of node
+ * @param mutations_merged Mutation relative to node, for trying children of node
+ * @return Whether there are mutations splitted under the new branching node, if not, for next level of recursion
+ */
 bool merged_mutation_if_continue_down(
     const MAT::Node *node, int &lower_bound, int &parsimony_score_if_split_here,
     range<MAT::Valid_Mutation> par_mut_iter,
@@ -40,9 +49,11 @@ bool merged_mutation_if_continue_down(
                 par_mut_iter++;
             }
         } else {
+            //back mutation
             have_not_shared=true;
             inserted.set_par_mut(mut.get_mut_one_hot(),mut.get_par_one_hot());
         }
+        //cannot test equality directly, as the sample may contain ambiguous mutations
         if(!(inserted.get_mut_one_hot()&inserted.get_par_one_hot())){
             parsimony_score_if_split_here++;
             if (!(inserted.get_mut_one_hot() &
@@ -71,6 +82,7 @@ int parsimony_score_if_merge_with_another_children(
     range<MAT::Valid_Mutation> par_mut_iter,
     range<MAT::Valid_Mutation> other_child_mut_iter) {
     int to_return = 0;
+    bool other_child_have_unique=false;
     for (; par_mut_iter; par_mut_iter++) {
         while (other_child_mut_iter &&
                (other_child_mut_iter->position < par_mut_iter->position)) {
@@ -81,13 +93,15 @@ int parsimony_score_if_merge_with_another_children(
             if (!(other_child_mut_iter->get_mut_one_hot() &
                 par_mut_iter->get_mut_one_hot()) ){
                 to_return++;
+                other_child_have_unique=true;
             }
             other_child_mut_iter++;
         } else {
             other_child_mut_iter++;
+            other_child_have_unique=true;
         }
     }
-    return to_return;
+    return other_child_have_unique?to_return:std::numeric_limits<decltype(to_return)>::max();
 }
 struct placement_result_ifc {
     int best_score;
@@ -98,13 +112,7 @@ struct placement_result_ifc {
     std::vector<MAT::Valid_Mutation> mutations_relative_to_parent;
     std::mutex mutex;
 };
-/**
- * @brief Serial DFS placement
- * @param best_node
- * @param best_score
- * @param mutations mutation needed if placed at parent of "node"
- * @param node start searching from subtree rooted at node
- */
+
 static int place_first_pass_helper(
     placement_result_ifc &output,
     const std::vector<MAT::Valid_Mutation> &mutations, const MAT::Node *node,
@@ -152,7 +160,13 @@ static int place_first_pass_helper(
     }
     return lower_bound;
 }
-
+/**
+ * @brief Serial DFS placement
+ * @param best_node
+ * @param best_score
+ * @param mutations mutation needed if placed at parent of "node"
+ * @param node start searching from subtree rooted at node
+ */
 static void place_first_pass_serial_each_level(
     placement_result_ifc &output,
     const std::vector<MAT::Valid_Mutation> &mutations, MAT::Node *node,
@@ -193,6 +207,7 @@ struct first_pass_functor : public tbb::task {
             output, mutations, node, already_placed_samples, mutations_merged);
         // go down if can reduce parsimony score
         if (lower_bound < output.best_score) {
+            //agglomerative pattern, if there are less work, do not parallelize
             if (node->dfs_end_index - node->dfs_index < THRESHOLD) {
                 for (auto c : node->children) {
                     place_first_pass_serial_each_level(
@@ -225,7 +240,7 @@ struct first_pass_functor : public tbb::task {
  * its parent
  * @param above_root samples placed above root
  */
-static void place_first_pass(
+void place_first_pass(
     std::string &sample_name, std::vector<MAT::Valid_Mutation> &mutations,
     MAT::Tree *tree,
     std::vector<first_pass_per_node_t> &output,

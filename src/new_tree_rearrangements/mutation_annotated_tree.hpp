@@ -37,16 +37,20 @@ class nuc_2bit{
 class nuc_one_hot{
     uint8_t nuc;
     public:
-    nuc_one_hot():nuc(0xff){}
+    nuc_one_hot(){
+        #ifndef NDEBUG
+            nuc=0xff;
+        #endif
+    }
 
     nuc_one_hot(uint8_t nuc,bool skip_check=false):nuc(nuc){
-        assert(!(nuc&0xf0)||skip_check);
+        //assert(!(nuc&0xf0)||skip_check);
     }
     bool is_invalid() const{
         return nuc==0xff;
     }
     operator uint8_t() const{
-        assert(!(nuc&0xf0));
+        //assert(!(nuc&0xf0));
         return nuc;
     }
 
@@ -61,15 +65,15 @@ class nuc_one_hot{
     }
 
     bool is_ambiguous()const{
-        assert(nuc);
-        assert(!(nuc&0xf0));
+        //assert(nuc);
+        //assert(!(nuc&0xf0));
         return __builtin_popcount(nuc)!=1;
     }
 
     nuc_one_hot choose_first()const{
-        assert(!(nuc&0xf0));
+        //assert(!(nuc&0xf0));
         uint8_t ret=1<<__builtin_ctz(nuc);
-        assert(ret&nuc);
+        //assert(ret&nuc);
         return ret;
     }
 };
@@ -138,7 +142,7 @@ namespace Mutation_Annotated_Tree {
             return child_muts&0xf;
         }
 
-        const uint8_t get_chromIdx()const{
+        uint8_t get_chromIdx()const{
             return chrom_idx;
         }
 
@@ -185,7 +189,7 @@ namespace Mutation_Annotated_Tree {
         }
 
         void set_auxillary(nuc_one_hot all_major_allele,nuc_one_hot boundary1){
-            assert(all_major_allele&get_mut_one_hot());
+            //assert(all_major_allele&get_mut_one_hot());
             boundary1_all_major_allele=all_major_allele|(boundary1<<4);
         }
 
@@ -214,7 +218,7 @@ namespace Mutation_Annotated_Tree {
             if (other.boundary1_all_major_allele!=boundary1_all_major_allele) {
                 return false;
             }
-            assert(other.chrom_idx==chrom_idx);
+            //assert(other.chrom_idx==chrom_idx);
             return true;
         }
         inline bool is_masked() const {

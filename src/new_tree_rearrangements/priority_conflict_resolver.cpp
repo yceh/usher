@@ -37,7 +37,7 @@ static void remove_move(Cross_t &potential_crosses, const Profitable_Moves_ptr_t
         }
     });
 }
-// Reggister "candidate_move" to apply
+// Register "candidate_move" to apply
 bool Conflict_Resolver::register_single_move_no_conflict(
     Profitable_Moves_ptr_t& candidate_move)  {
     candidate_move->apply_nodes([&](MAT::Node* node) {

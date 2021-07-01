@@ -13,13 +13,14 @@ void clean_up_src_states(MAT::Node *src,
                                 std::vector<Altered_Node_t> &out) {
     MAT::Mutations_Collection &in = src->mutations;
     //bool have_change = false;
-    State_Change_Collection changed_state;
+    State_Change_Collection changed_state({state_change(NEW_SRC_MARK)});
     for (auto &mut : in) {
         nuc_one_hot new_state =
             mut.get_par_one_hot() & mut.get_all_major_allele();
         nuc_one_hot old_state = mut.get_mut_one_hot();
         //Change state if it can now follow parent state, and the old state is inconsistent
         if (new_state && old_state != new_state) {
+            src->changed=true;
             //have_change = true;
             mut.set_mut_one_hot(new_state);
             changed_state.emplace_back(mut, old_state);
@@ -34,7 +35,7 @@ void clean_up_src_states(MAT::Node *src,
                                               (!mut.get_boundary1_one_hot()));
                                       }),
                        in.mutations.end());
-    if (!changed_state.empty()) {
+    if (changed_state.size()>1) {
         out.emplace_back(src);
         out.back().changed_states = std::move(changed_state);
     }
