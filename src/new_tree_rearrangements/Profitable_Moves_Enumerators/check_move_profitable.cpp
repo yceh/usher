@@ -34,25 +34,22 @@ void output_result(MAT::Node *src, MAT::Node *dst, MAT::Node *LCA,
                std::vector<MAT::Node *> &node_stack_from_dst,
                std::vector<MAT::Node *> &node_stack_above_LCA,int radius_left) {
     if (parsimony_score_change <= output.score_change) {
-        if (parsimony_score_change < output.score_change||
-            ( parsimony_score_change == output.score_change&&
-                radius_left>output.radius_left)) {
+        if (parsimony_score_change < output.score_change) {
             output.score_change = parsimony_score_change;
             for (auto t : output.moves) {
                 delete t;
             }
             output.moves.clear();
         }
-        output.radius_left=radius_left;
         Profitable_Moves_ptr_t new_move = new Profitable_Moves;
         new_move->score_change = parsimony_score_change;
         new_move->src_to_LCA = std::move(node_stack_from_src);
         new_move->dst_to_LCA = std::move(node_stack_from_dst);
         new_move->src = src;
         new_move->LCA = LCA;
-        assert(dst == LCA || new_move->dst_to_LCA.back()->parent == LCA);
-        assert(src->parent == LCA ||
-               new_move->src_to_LCA.back()->parent == LCA);
+        new_move->radius_left=radius_left;
+        //assert(dst == LCA || new_move->dst_to_LCA.back()->parent == LCA);
+        //assert(src->parent == LCA ||new_move->src_to_LCA.back()->parent == LCA);
         MAT::Node* last_node=nullptr;
         for (const auto node : node_stack_above_LCA) {
             if (node!=last_node) {
@@ -120,7 +117,7 @@ int check_move_profitable_dst_not_LCA(
 #endif
     std::vector<MAT::Node *> node_stack_from_dst({});
 
-    assert(dst);
+    //assert(dst);
     Mutation_Count_Change_Collection dst_added;
     //Going up from dst node to LCA node to adjust state assignment
         if(!dst_branch(LCA, mutations, parsimony_score_change,
@@ -154,7 +151,7 @@ int check_move_profitable_dst_not_LCA(
     auto ref_score=get_parsimmony_score_only(src,dst,LCA,tree);
     assert(parsimony_score_change == ref_score);
 #endif
-    assert((dst==LCA&&node_stack_above_LCA[0]==LCA)||node_stack_from_dst[0]==dst);
+    //assert((dst==LCA&&node_stack_above_LCA[0]==LCA)||node_stack_from_dst[0]==dst);
     output_result(src, dst, LCA, parsimony_score_change, output,
               node_stack_from_src, node_stack_from_dst, node_stack_above_LCA,radius);
     return parsimony_score_change;
