@@ -4,6 +4,11 @@
 #include <condition_variable>
 #include "check_samples.hpp"
 #pragma once
+struct New_Sample_t{
+    std::string name;
+    std::vector<Mutation_Annotated_Tree::Valid_Mutation> mutations;
+};
+void place_samples(std::vector<New_Sample_t>& new_samples,Mutation_Annotated_Tree::Tree *tree);
 extern std::chrono::time_point<std::chrono::steady_clock> last_save_time;
 extern bool no_write_intermediate;
 extern size_t max_queued_moves;
@@ -70,7 +75,7 @@ void apply_moves(std::vector<Profitable_Moves_ptr_t> &all_moves, MAT::Tree &t,
 void fix_condensed_nodes(MAT::Tree *tree) ;
 void find_nodes_to_move(const std::vector<MAT::Node *> &bfs_ordered_nodes,
                    tbb::concurrent_vector<MAT::Node*> &output,bool is_first,int radius) ;
-void VCF_input(const char * name,MAT::Tree& tree);
+void VCF_input(const char * name,MAT::Tree& tree,std::vector<New_Sample_t>& new_samples,bool reassign_state);
 
 size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
               tbb::concurrent_vector<MAT::Node *> &nodes_to_search,

@@ -1,8 +1,10 @@
 #include "tree_rearrangement_internal.hpp"
+#include <chrono>
 #include <cstdio>
 #include <string>
 #include "apply_move/apply_move.hpp"
 #include <tbb/task.h>
+#include <vector>
 //A variant of clean tree that can also clean nodes have only 1 children, but have valid mutation
 struct clean_up_internal_nodes_single_child_or_no_mutation:public tbb::task{
 MAT::Node* this_node;
@@ -161,7 +163,8 @@ char get_state(char* sample,int position){
 void load_vcf_nh_directly( MAT::Tree& t,const std::string& vcf_path,Original_State_t& origin_states){
     //load VCF
     auto start=std::chrono::steady_clock::now();
-    VCF_input(vcf_path.c_str(),t);
+    std::vector<New_Sample_t> new_samples;
+    VCF_input(vcf_path.c_str(),t,new_samples,true);
     fputs("Finished loading from VCF and state assignment\n",stderr);
     auto vcf_load_end=std::chrono::steady_clock::now();
     std::chrono::duration<double>  elpased_time =vcf_load_end-start;
@@ -184,4 +187,12 @@ void load_vcf_nh_directly( MAT::Tree& t,const std::string& vcf_path,Original_Sta
     auto clean_tree_end=std::chrono::steady_clock::now();
     elpased_time =clean_tree_end-vcf_load_end;
     fprintf(stderr, "tree post processing took %f minutes\n",elpased_time.count()/60.0);
+    if (new_samples.size()) {
+        fprintf(stderr, "Placing %zu new samples",new_samples.size());
+        t.save_detailed_mutations("before_place_sample.pb");
+        place_samples(new_samples, &t);
+        t.save_detailed_mutations("after_place_sample.pb");
+        elpased_time =std::chrono::steady_clock::now()-clean_tree_end;
+        fprintf(stderr, "Placing samples took %f minutes\n",elpased_time.count()/60.0);
+    }
 }

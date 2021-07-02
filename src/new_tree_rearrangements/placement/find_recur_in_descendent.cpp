@@ -58,7 +58,7 @@ void set_descendent_alleles(range<MAT::Valid_Mutation> descendent_alleles,
         }
         out.push_back(mut);
         auto &out_pushed = out.back();
-        out_pushed.allele_present_among_descendents |= mut.get_mut_one_hot();
+        out_pushed.allele_present_among_descendents |= mut.get_all_major_allele();
         if (descendent_alleles &&
             (descendent_alleles->position == mut.get_position())) {
             out_pushed.allele_present_among_descendents |=
@@ -128,10 +128,10 @@ struct find_descendent_alleles : public tbb::task {
         for (auto t : tasks) {
             cont->spawn(*t);
         }
-        return nullptr;
+        return (tasks.empty())?cont:nullptr;
     }
 };
 void placement_prep(MAT::Tree *t) {
     std::vector<MAT::Valid_Mutation> ignored;
-    find_descendent_alleles(t->root, ignored);
+    tbb::task::spawn_root_and_wait(*new (tbb::task::allocate_root()) find_descendent_alleles(t->root, ignored));
 }

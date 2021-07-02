@@ -93,7 +93,7 @@ int main(int argc, char **argv) {
         ("ambi_protobuf,a", po::value<std::string>(&input_complete_pb_path)->default_value(""),
          "Continue from intermediate protobuf")
         ("max_queued_moves,q",po::value<size_t>(&max_queued_moves)->default_value(1000),"Maximium number of profitable moves found before applying these moves")
-        ("minutes_between_save,s",po::value<unsigned int>(&minutes_between_save)->default_value(60),"Maximium number of profitable moves found before applying these moves")
+        ("minutes_between_save,s",po::value<unsigned int>(&minutes_between_save)->default_value(10),"Maximium number of profitable moves found before applying these moves")
         ("do-not-write-intermediate-files,n","Do not write intermediate files.")
         ("exhaustive_mode,e","Search every non-root node as source node.")
         ("max-hours,M",po::value(&max_optimize_hours)->default_value(0),"Maximium number of hours to run");
@@ -217,6 +217,11 @@ int main(int argc, char **argv) {
     
     if (input_complete_pb_path!="") {
         t.load_detatiled_mutations(input_complete_pb_path);
+        if(input_vcf_path!=""){
+            std::vector<New_Sample_t> new_samples;
+            VCF_input(input_vcf_path.c_str(), t, new_samples, false);
+            place_samples(new_samples, &t);
+        }
     }else{
         if (input_vcf_path != "") {
             fputs("Loading input tree\n",stderr);
@@ -238,10 +243,7 @@ int main(int argc, char **argv) {
             intermediate_writing=intermediate_template;
             make_output_path(intermediate_writing);
             t.save_detailed_mutations(intermediate_writing);
-            auto initial_intermediate_pb=output_path+"initial_intermediateXXXXXX.pb";
-            auto fd=mkstemps(const_cast<char*>(initial_intermediate_pb.c_str()), 3);
-            close(fd);
-            rename(intermediate_writing.c_str(), initial_intermediate_pb.c_str());
+            rename(intermediate_writing.c_str(), intermediate_pb_base_name.c_str());
             fputs("Finished checkpointing initial tree.\n",stderr);
         }
     }
@@ -278,9 +280,6 @@ int main(int argc, char **argv) {
     }else{
         fputs("Start Finding nodes to move \n",stderr);
         find_nodes_to_move(bfs_ordered_nodes, nodes_to_search,isfirst,radius);
-        for(auto node:bfs_ordered_nodes){
-            node->changed=false;
-        }
     }
     isfirst=false;
     fprintf(stderr,"%zu nodes to search\n",nodes_to_search.size());

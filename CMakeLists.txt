@@ -13,7 +13,7 @@ configure_file(src/version.hpp.in version.hpp)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -msse4.1 -std=c++11 -Wall -g -Wno-unused-function -Wno-deprecated-declarations")
 #-DDEBUG_PARSIMONY_SCORE_CHANGE_CORRECT
-set(CMAKE_CXX_FLAGS_DEBUG "-O3 ")
+set(CMAKE_CXX_FLAGS_DEBUG "-O3 -DCHECK_PLACEMENT")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-UNDEBUG -O3 ")
 set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3")
 set(CMAKE_INCLUDE_CURRENT_DIR ON) 
@@ -42,6 +42,7 @@ FIND_PACKAGE(Boost COMPONENTS program_options iostreams filesystem date_time REQ
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
 AUX_SOURCE_DIRECTORY(src/new_tree_rearrangements/Profitable_Moves_Enumerators New_Profitable_Moves_Enumerators) 
 AUX_SOURCE_DIRECTORY(src/new_tree_rearrangements/apply_move patch_tree) 
+AUX_SOURCE_DIRECTORY(src/new_tree_rearrangements/placement placement) 
 file(GLOB MATUTIL_SRCS "src/matUtils/*.cpp" "src/matUtils/*.hpp")
 file(GLOB MATOPTIMIZE_SRCS "src/matOptimize/*.cpp" "src/matOptimize/*.hpp")
 find_package(ZLIB)
@@ -126,7 +127,7 @@ else()
         ${PROTO_SRCS}
         ${PROTO_HDRS}
         )
-    add_executable(tree_rearrange_new
+    add_executable(tree_rearrange_new_placement
         src/new_tree_rearrangements/mutation_annotated_tree.cpp
         src/new_tree_rearrangements/mutation_annotated_tree_node.cpp
         src/new_tree_rearrangements/mutation_annotated_tree_load_store.cpp
@@ -145,6 +146,7 @@ else()
         #src/new_tree_rearrangements/priority_conflict_resolver_cross_only.cpp
         src/new_tree_rearrangements/priority_conflict_resolver.cpp
         ${patch_tree}
+        ${placement}
         ${New_Profitable_Moves_Enumerators}
         ${PROTO_SRCS}
         ${PROTO_HDRS}
@@ -168,9 +170,9 @@ else(SAVE_PROFILE)
     endif(DEBUG)
 endif(SAVE_PROFILE)
 
-#set_property(TARGET tree_rearrange_new PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+#set_property(TARGET tree_rearrange_new_placement PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 TARGET_LINK_LIBRARIES(compareVCF PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
-TARGET_LINK_LIBRARIES(tree_rearrange_new PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
+TARGET_LINK_LIBRARIES(tree_rearrange_new_placement PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
 
 TARGET_LINK_LIBRARIES(rename_fasta PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
 TARGET_LINK_LIBRARIES(usher PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)

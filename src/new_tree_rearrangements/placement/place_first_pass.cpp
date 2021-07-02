@@ -5,7 +5,7 @@
 #include <tbb/task.h>
 #include <vector>
 #include "placement.hpp"
-
+extern std::atomic<size_t> estimate_par_increase;
 /**
  * @param[in] node
  * @param[out] lower_bound lower_bound of parsimony possible if placed at subtree rooted at node
@@ -18,7 +18,7 @@ bool merged_mutation_if_continue_down(
     const MAT::Node *node, int &lower_bound, int &parsimony_score_if_split_here,
     range<MAT::Valid_Mutation> par_mut_iter,
     std::vector<MAT::Valid_Mutation> &mutations_merged) {
-    bool have_not_shared=false;
+    bool have_shared=false;
     for (const auto &mut : node->valid_mutations) {
         while (par_mut_iter && (par_mut_iter->position < mut.position)) {
             // mutations needed if placed at parent and no change
@@ -40,17 +40,16 @@ bool merged_mutation_if_continue_down(
             if (par_mut_iter->get_mut_one_hot() == mut.get_mut_one_hot()) {
                 // coincide, and a mutation at node consumed that mutation
                 mutations_merged.pop_back();
+                have_shared=true;
                 par_mut_iter++;
                 continue;
             } else {
                 // coincide, but split
                 inserted.set_par_mut(mut.get_mut_one_hot(),par_mut_iter->get_mut_one_hot());
-                have_not_shared=true;
                 par_mut_iter++;
             }
         } else {
             //back mutation
-            have_not_shared=true;
             inserted.set_par_mut(mut.get_mut_one_hot(),mut.get_par_one_hot());
         }
         //cannot test equality directly, as the sample may contain ambiguous mutations
@@ -64,7 +63,6 @@ bool merged_mutation_if_continue_down(
     }
     while (par_mut_iter) {
         mutations_merged.push_back(*par_mut_iter);
-        par_mut_iter++;
         if(!(par_mut_iter->get_mut_one_hot()&par_mut_iter->get_par_one_hot())){
             parsimony_score_if_split_here++;
             // if none of the descendent mutation can mutate to the desired
@@ -74,15 +72,15 @@ bool merged_mutation_if_continue_down(
                 lower_bound++;
             }
         }
+        par_mut_iter++;
     }
-    return have_not_shared;
+    return have_shared;
 }
 
 int parsimony_score_if_merge_with_another_children(
     range<MAT::Valid_Mutation> par_mut_iter,
     range<MAT::Valid_Mutation> other_child_mut_iter) {
     int to_return = 0;
-    bool other_child_have_unique=false;
     for (; par_mut_iter; par_mut_iter++) {
         while (other_child_mut_iter &&
                (other_child_mut_iter->position < par_mut_iter->position)) {
@@ -93,15 +91,13 @@ int parsimony_score_if_merge_with_another_children(
             if (!(other_child_mut_iter->get_mut_one_hot() &
                 par_mut_iter->get_mut_one_hot()) ){
                 to_return++;
-                other_child_have_unique=true;
             }
             other_child_mut_iter++;
         } else {
-            other_child_mut_iter++;
-            other_child_have_unique=true;
+            to_return++;
         }
     }
-    return other_child_have_unique?to_return:std::numeric_limits<decltype(to_return)>::max();
+    return to_return;
 }
 struct placement_result_ifc {
     int best_score;
@@ -126,16 +122,15 @@ static int place_first_pass_helper(
     range<MAT::Valid_Mutation> par_mut_iter(
         mutations); // iterator for would-be mutations if placed at parent
     // mutations needed if placed at node
-    bool have_not_shared=merged_mutation_if_continue_down(node, lower_bound,
+    bool have_shared=merged_mutation_if_continue_down(node, lower_bound,
                                      parsimony_score_if_split_here,
                                      par_mut_iter, mutations_merged);
-    //all mutation at node consume one of the mutation, place as children of node (next level of recursion)
-    if(!have_not_shared){
-        return lower_bound;
-    }
     auto min_score = std::min(output.best_score, parsimony_score_if_split_here);
     // searching pending children
-    for (const auto &placed_child : already_placed_samples[node->dfs_index]) {
+    /*for (const auto &placed_child : already_placed_samples[node->dfs_index]) {
+        if (!placed_child.ready) {
+            continue;
+        }
         // Best estimate is all mutations in child consume one mutation from
         // parent
         if ((int)mutations.size() -
@@ -148,7 +143,7 @@ static int place_first_pass_helper(
             min_score =
                 std::min(output.best_score, parsimony_score_if_split_here);
         }
-    }
+    }*/
     // output
     if (parsimony_score_if_split_here < output.best_score) {
         std::lock_guard<std::mutex> lock(output.mutex);
@@ -243,18 +238,15 @@ struct first_pass_functor : public tbb::task {
 void place_first_pass(
     std::string &sample_name, std::vector<MAT::Valid_Mutation> &mutations,
     MAT::Tree *tree,
-    std::vector<first_pass_per_node_t> &output,
-    first_pass_per_node_t &above_root) {
+    std::vector<first_pass_per_node_t> &output) {
     placement_result_ifc result;
     result.best_node = nullptr;
-    result.best_score = mutations.size();
+    result.best_score = mutations.size()+1;
     tbb::task::spawn_root_and_wait(
         *new (tbb::task::allocate_root())
             first_pass_functor(result, mutations, tree->root, output));
-    if (result.best_node) {
-        output[result.best_node->dfs_index].emplace_back(
-            std::move(sample_name), std::move(result.mutations_relative_to_parent));
-    } else {
-        above_root.emplace_back(std::move(sample_name), std::move(mutations));
-    }
+    assert (result.best_node);
+    estimate_par_increase.fetch_add(result.best_score);
+    output[result.best_node->dfs_index].emplace_back(
+        sample_name, result.mutations_relative_to_parent);
 }

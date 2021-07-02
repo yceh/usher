@@ -106,9 +106,9 @@ namespace Mutation_Annotated_Tree {
         uint8_t par_mut_nuc;
         uint8_t boundary1_all_major_allele; //boundary 1 alleles are alleles with allele count one less than major allele count
         uint8_t child_muts;//left child state then right child state for binary nodes
-        static tbb::concurrent_unordered_map<std::string, uint8_t> chromosome_map;
         static std::mutex ref_lock;//reference nuc are stored in a separate vector, need to be locked when adding new mutations
         public:
+        static tbb::concurrent_unordered_map<std::string, uint8_t> chromosome_map;
         static std::vector<std::string> chromosomes;// chromosome index to name map
         static std::vector<nuc_one_hot> refs;
         void set_boundary_one_hot(nuc_one_hot boundary1){
@@ -240,6 +240,20 @@ namespace Mutation_Annotated_Tree {
         uint8_t allele_present_among_descendents;
         uint8_t flags;
         Valid_Mutation(){}
+        Valid_Mutation(int pos, uint8_t chrom_idx, nuc_one_hot ref_nuc,
+                       nuc_one_hot mut_nuc)
+            : position(pos), chrom_idx(chrom_idx),
+              par_mut_nuc((ref_nuc << 4) | mut_nuc),
+              allele_present_among_descendents(0xf), flags(0) {
+            if (Mutation::refs.size() <= (size_t) position) {
+                std::lock_guard<std::mutex> lk(Mutation::ref_lock);
+                Mutation::refs.resize(
+                    std::max((int)Mutation::refs.size(), position + 1));
+                // assert((refs[position].is_invalid()) || refs[position] ==
+                // ref);
+                Mutation::refs[position] = ref_nuc;
+            }
+        }
         Valid_Mutation(const Mutation& mut){
             assert(mut.is_valid());
             position=mut.position;
@@ -264,6 +278,9 @@ namespace Mutation_Annotated_Tree {
         }
         void set_par_mut(nuc_one_hot new_par,nuc_one_hot new_mut){
             par_mut_nuc=(new_par<<4)|new_mut;
+        }
+        bool operator<(const Valid_Mutation& other) const{
+            return position<other.position;
         }
     };
     //Wraper of a vector of mutation, sort of like boost::flatmap
@@ -500,7 +517,7 @@ namespace Mutation_Annotated_Tree {
             void save_detailed_mutations(const std::string& path)const;
             void load_detatiled_mutations(const std::string& path);
             void load_from_newick(const std::string& newick_string,bool use_internal_node_label=false);
-            void condense_leaves(std::vector<std::string> = std::vector<std::string>());
+            void condense_leaves();
             void uncondense_leaves();
             
             friend class Node;

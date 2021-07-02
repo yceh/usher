@@ -116,7 +116,7 @@ typedef std::vector<Mutation_Count_Change> Mutation_Count_Change_Collection;
 //convience class for tracking iterator and its end position
 template <typename value_type> class range {
     const value_type* curr;
-    const value_type* const end;
+    const value_type* end;
 
   public:
     template<typename T>

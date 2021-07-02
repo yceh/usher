@@ -1,7 +1,9 @@
 #include "mutation_annotated_tree.hpp"
 #include "Fitch_Sankoff.hpp"
+#include <algorithm>
 #include <cstdio>
 #include <iostream>
+#include <limits>
 #include <string>
 #include <tbb/pipeline.h>
 #include "tbb/parallel_for_each.h"
@@ -168,12 +170,19 @@ static void reassign_states(MAT::Tree& t, Original_State_t& origin_states){
     Fitch_Sankoff_prep(bfs_ordered_nodes,child_idx_range, parent_idx);
     tbb::parallel_for_each(
         mutated_positions.begin(), mutated_positions.end(),
-        [&output,&child_idx_range,&parent_idx](
+        [&output,&child_idx_range,&parent_idx,&t](
             const std::pair<MAT::Mutation,
                             std::unordered_map<std::string, nuc_one_hot> *>
                 &pos) {
             std::unordered_map<std::string, nuc_one_hot> *mutated = pos.second;
-            Fitch_Sankoff_Whole_Tree(child_idx_range,parent_idx, pos.first, *mutated,
+            std::vector<std::pair<long,nuc_one_hot>> mutated_nodes_idx;
+            mutated_nodes_idx.emplace_back(0,0xf);
+            mutated_nodes_idx.reserve(mutated->size());
+            for (const auto& mutated_node : *mutated) {
+                mutated_nodes_idx.emplace_back(t.get_node(mutated_node.first)->bfs_index,mutated_node.second);
+            }
+            std::sort(mutated_nodes_idx.begin(),mutated_nodes_idx.end());
+            Fitch_Sankoff_Whole_Tree(child_idx_range,parent_idx, pos.first, mutated_nodes_idx,
                                      output);
         });
     tbb::affinity_partitioner ap;
