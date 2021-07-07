@@ -44,11 +44,9 @@ static void get_mutation_set_from_root_ambiguious(MAT::Node *node,
     }
 }
 #endif
-void place_samples(std::vector<New_Sample_t>& new_samples,MAT::Tree *tree){
+void place_samples(std::vector<New_Sample_t>& new_samples,MAT::Tree *tree,Original_State_t& ori_state){
     auto sample_count=new_samples.size();
     auto start_time=std::chrono::steady_clock::now();
-    Original_State_t ori_state;
-    check_samples(tree->root, ori_state, tree);
     tbb::parallel_for(tbb::blocked_range<size_t>(0,new_samples.size()),[&new_samples,&ori_state](const tbb::blocked_range<size_t>& range){
         for (size_t idx=range.begin(); idx<range.end(); idx++) {
             Mutation_Set mut_set;

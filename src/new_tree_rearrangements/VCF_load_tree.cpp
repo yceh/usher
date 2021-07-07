@@ -190,7 +190,7 @@ void load_vcf_nh_directly( MAT::Tree& t,const std::string& vcf_path,Original_Sta
     if (new_samples.size()) {
         fprintf(stderr, "Placing %zu new samples",new_samples.size());
         t.save_detailed_mutations("before_place_sample.pb");
-        place_samples(new_samples, &t);
+        place_samples(new_samples, &t,origin_states);
         t.save_detailed_mutations("after_place_sample.pb");
         elpased_time =std::chrono::steady_clock::now()-clean_tree_end;
         fprintf(stderr, "Placing samples took %f minutes\n",elpased_time.count()/60.0);

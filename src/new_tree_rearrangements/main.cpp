@@ -220,7 +220,8 @@ int main(int argc, char **argv) {
         if(input_vcf_path!=""){
             std::vector<New_Sample_t> new_samples;
             VCF_input(input_vcf_path.c_str(), t, new_samples, false);
-            place_samples(new_samples, &t);
+            check_samples(t.root, origin_states, &t);
+            place_samples(new_samples, &t,origin_states);
         }
     }else{
         if (input_vcf_path != "") {

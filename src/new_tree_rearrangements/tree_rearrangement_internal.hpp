@@ -8,7 +8,7 @@ struct New_Sample_t{
     std::string name;
     std::vector<Mutation_Annotated_Tree::Valid_Mutation> mutations;
 };
-void place_samples(std::vector<New_Sample_t>& new_samples,Mutation_Annotated_Tree::Tree *tree);
+void place_samples(std::vector<New_Sample_t>& new_samples,Mutation_Annotated_Tree::Tree *tree,Original_State_t& ori_state);
 extern std::chrono::time_point<std::chrono::steady_clock> last_save_time;
 extern bool no_write_intermediate;
 extern size_t max_queued_moves;
