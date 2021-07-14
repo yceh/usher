@@ -2,6 +2,7 @@
 #define MUTATION_ANNOTATED_TREE
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <mutex>
 #include <sys/types.h>
 #include <unordered_map>
@@ -102,13 +103,45 @@ namespace Mutation_Annotated_Tree {
         int position;
         uint8_t chrom_idx;
         uint8_t par_mut_nuc;
+        #ifdef LITE
+        uint8_t descendent_sibling_mut; //boundary 1 alleles are alleles with allele count one less than major allele count
+        uint8_t flags;
+        std::unordered_map<int,char> tip_muts;
+        static const char MUT_TIP_MASK=1;
+        #else
         uint8_t boundary1_all_major_allele; //boundary 1 alleles are alleles with allele count one less than major allele count
         uint8_t child_muts;//left child state then right child state for binary nodes
+        #endif
         static tbb::concurrent_unordered_map<std::string, uint8_t> chromosome_map;
         static std::mutex ref_lock;//reference nuc are stored in a separate vector, need to be locked when adding new mutations
         public:
         static std::vector<std::string> chromosomes;// chromosome index to name map
         static std::vector<nuc_one_hot> refs;
+        #ifdef LITE
+        Mutation(const std::string& chromosome,int position,nuc_one_hot mut,nuc_one_hot par,nuc_one_hot ref=0);
+        bool is_mut_tip ()const{
+            return flags&MUT_TIP_MASK;
+        }
+        void set_mut_tip(){
+            flags|=MUT_TIP_MASK;
+        }
+        nuc_one_hot get_descendent_mut() const{
+            return descendent_sibling_mut>>4;
+        }
+        nuc_one_hot get_sibling_mut() const{
+            return descendent_sibling_mut&0xf;
+        }
+        void set_descendent(nuc_one_hot descendent){
+            descendent_sibling_mut=(descendent<<4)|(descendent_sibling_mut&0xf);
+        }
+        void set_sibling(nuc_one_hot sibling){
+            descendent_sibling_mut=(descendent_sibling_mut&0xf0)|sibling;
+        }
+        void clean_auxilary(){
+            flags=0;
+            descendent_sibling_mut=0;
+        }
+        #else
         void set_boundary_one_hot(nuc_one_hot boundary1){
             boundary1_all_major_allele=(boundary1_all_major_allele&0xf)|(boundary1<<4);
         }
@@ -118,14 +151,7 @@ namespace Mutation_Annotated_Tree {
         Mutation(int pos):position(pos),chrom_idx(0),par_mut_nuc(0),boundary1_all_major_allele(0),child_muts(0){}
 
         Mutation(uint8_t chrom_idx,int pos,uint8_t par_nuc,uint8_t mut_nuc):position(pos),chrom_idx(chrom_idx),par_mut_nuc((par_nuc<<4)|mut_nuc),boundary1_all_major_allele(mut_nuc),child_muts(mut_nuc|(mut_nuc<<4)){}
-
-        bool same_chrom(const Mutation& other) const{
-            return chrom_idx==other.chrom_idx;
-        }
-
-        const std::string& get_chromosome() const{
-            return chromosomes[chrom_idx];
-        }
+        Mutation():position(-1),chrom_idx(0),par_mut_nuc(0),boundary1_all_major_allele(0),child_muts(0){}
 
         void set_children(nuc_one_hot boundary1_alleles,nuc_one_hot tie_nuc,nuc_one_hot left_child_state,nuc_one_hot right_child_state){
             boundary1_all_major_allele=(boundary1_alleles<<4)|tie_nuc;
@@ -140,6 +166,30 @@ namespace Mutation_Annotated_Tree {
             return child_muts&0xf;
         }
 
+        nuc_one_hot get_all_major_allele() const{
+            return boundary1_all_major_allele&0xf;
+        }
+
+        nuc_one_hot get_boundary1_one_hot() const{
+            return boundary1_all_major_allele>>4;
+        }
+
+        void set_auxillary(nuc_one_hot all_major_allele,nuc_one_hot boundary1){
+            //assert(all_major_allele&get_mut_one_hot());
+            boundary1_all_major_allele=all_major_allele|(boundary1<<4);
+        }
+        //valid when it par_nuc!=mut_nuc
+        bool is_valid() const{
+            return (par_mut_nuc^(par_mut_nuc<<4))&0xf0;
+        }
+        #endif
+        bool same_chrom(const Mutation& other) const{
+            return chrom_idx==other.chrom_idx;
+        }
+
+        const std::string& get_chromosome() const{
+            return chromosomes[chrom_idx];
+        }
         uint8_t get_chromIdx()const{
             return chrom_idx;
         }
@@ -158,8 +208,7 @@ namespace Mutation_Annotated_Tree {
             return m;
         }
  */       
-        Mutation():position(-1),chrom_idx(0),par_mut_nuc(0),boundary1_all_major_allele(0),child_muts(0){
-        }
+
 
         nuc_one_hot get_ref_one_hot() const{
             return refs[position];
@@ -178,18 +227,6 @@ namespace Mutation_Annotated_Tree {
             return par_mut_nuc>>4;
         }
 
-        nuc_one_hot get_all_major_allele() const{
-            return boundary1_all_major_allele&0xf;
-        }
-
-        nuc_one_hot get_boundary1_one_hot() const{
-            return boundary1_all_major_allele>>4;
-        }
-
-        void set_auxillary(nuc_one_hot all_major_allele,nuc_one_hot boundary1){
-            //assert(all_major_allele&get_mut_one_hot());
-            boundary1_all_major_allele=all_major_allele|(boundary1<<4);
-        }
 
         void set_par_mut(nuc_one_hot new_par,nuc_one_hot new_mut){
             par_mut_nuc=(new_par<<4)|new_mut;
@@ -198,10 +235,7 @@ namespace Mutation_Annotated_Tree {
             par_mut_nuc&=0xf;
             par_mut_nuc|=(new_par<<4);
         }
-        //valid when it par_nuc!=mut_nuc
-        bool is_valid() const{
-            return (par_mut_nuc^(par_mut_nuc<<4))&0xf0;
-        }
+
 
         int get_position() const {
             return position;
@@ -210,7 +244,11 @@ namespace Mutation_Annotated_Tree {
         bool operator==(const Mutation& other) const{
             if(other.par_mut_nuc!=par_mut_nuc) return false;
             if(other.position!=position) return false;
+        #ifdef LITE
+            if (other.descendent_sibling_mut!=descendent_sibling_mut) {
+        #else
             if (other.boundary1_all_major_allele!=boundary1_all_major_allele) {
+#endif
                 return false;
             }
             //assert(other.chrom_idx==chrom_idx);
@@ -218,6 +256,11 @@ namespace Mutation_Annotated_Tree {
         }
         inline bool is_masked() const {
             return (position < 0);
+        }
+        Mutation invert()const{
+            Mutation out(*this);
+            out.set_par_mut(this->get_mut_one_hot(), this->get_par_one_hot());
+            return out;
         }
         inline std::string get_string() const {
             if (is_masked()) {
@@ -228,6 +271,7 @@ namespace Mutation_Annotated_Tree {
             }
         }
     };
+    #ifndef LITE
     //Wraper of a vector of mutation, sort of like boost::flatmap
     class Mutations_Collection{
         public:
@@ -365,7 +409,7 @@ namespace Mutation_Annotated_Tree {
             return true;
         }
     };
-
+#endif
     class Node {
         public:
             float branch_length;
@@ -373,8 +417,11 @@ namespace Mutation_Annotated_Tree {
             std::vector<std::string> clade_annotations;
             Node* parent;
             std::vector<Node*> children;
+            #ifdef LITE
+            std::vector<Mutation> mutations;
+            #else
             Mutations_Collection mutations;
-            //Mutations_Collection boundary_mutations;
+            #endif
             size_t dfs_index; //index in dfs pre-order
             size_t dfs_end_index; //index in dfs pre-order
             size_t bfs_index; //index in bfs
@@ -386,14 +433,16 @@ namespace Mutation_Annotated_Tree {
             Node(std::string id, Node* p, float l);
 
             Node(const Node& other, Node* parent,Tree* tree,bool copy_mutation=true);
-            bool add_mutation(Mutation& mut){
-                return mutations.insert(mut,Mutations_Collection::KEEP_OTHER);
-            }
+
             void clear_mutations(){
                 mutations.clear();
             }
             void clear_annotations() {
                 clade_annotations.clear();
+            }
+            #ifndef LITE
+            bool add_mutation(Mutation& mut){
+                return mutations.insert(mut,Mutations_Collection::KEEP_OTHER);
             }
             bool no_valid_mutation()const{
                 return mutations.no_valid_mutation();
@@ -411,6 +460,7 @@ namespace Mutation_Annotated_Tree {
                 }
                 this->mutations.refill(mutations);
             }
+            #endif
             Node* add_child(Node* new_child,Mutation_Annotated_Tree::Tree* tree);
             void delete_this();
     };
@@ -487,5 +537,7 @@ struct std::hash<Mutation_Annotated_Tree::Mutation> {
         return in.get_position();
     }
 };
+#ifndef LITE
 nuc_one_hot get_parent_state(Mutation_Annotated_Tree::Node* ancestor,int position);
+#endif
 #endif

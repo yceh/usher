@@ -9,29 +9,45 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
-#define NDEBUG
+#undef NDEBUG
 #include <cassert>
+#ifdef LITE
+#define get_allele get_mut_one_hot
+#else
+#define get_allele get_mut_one_hot get_all_major_allele
+#endif
+
 //add mutation m to parent_mutations, which represent the mutation of a node relative to root, 
 //or update major allele if already present
 void ins_mut(Mutation_Set &parent_mutations,const Mutation_Annotated_Tree::Mutation &m,bool is_leaf) {
     auto temp = parent_mutations.insert(m);
     //other major allele of leaf node is also counted
-    if(!is_leaf)
-{    const_cast<MAT::Mutation&>(*temp.first).set_auxillary(temp.first->get_mut_one_hot(),0);
-}    if (!temp.second) {
+    #ifndef LITE
+    if (!is_leaf) {
+        const_cast<MAT::Mutation &>(*temp.first)
+            .set_auxillary(temp.first->get_mut_one_hot(), 0);
+    }
+    #endif
+    if (!temp.second) {
         //already present
         assert(temp.first->get_mut_one_hot()==m.get_par_one_hot());
         //mutate back to ref, so no more mutation
-        if ((m.get_mut_one_hot() == m.get_ref_one_hot()&&(!is_leaf))||(m.get_all_major_allele()==m.get_ref_one_hot())) {
+        if ((m.get_mut_one_hot() == m.get_ref_one_hot()&&(!is_leaf))||(m.get_allele()==m.get_ref_one_hot())) {
             parent_mutations.erase(temp.first);
         }else {
         // update state
         const_cast<MAT::Mutation&>(*temp.first).set_mut_one_hot(m.get_mut_one_hot());
-        const_cast<MAT::Mutation&>(*temp.first).set_auxillary(is_leaf?m.get_all_major_allele():m.get_mut_one_hot(),0);
+    #ifndef LITE
+        const_cast<MAT::Mutation&>(*temp.first).set_auxillary(is_leaf?m.get_allele():m.get_mut_one_hot(),0);
+    #endif
         }
-    }else {
+    } else {
         assert(m.get_par_one_hot() == m.get_ref_one_hot());
-        assert(m.get_mut_one_hot() != m.get_par_one_hot()||!m.is_valid());
+        assert(m.get_mut_one_hot() != m.get_par_one_hot()
+    #ifndef LITE
+        ||!m.is_valid()
+    #endif
+        );
     }
 }
 //functor for getting state of all leaves
@@ -47,7 +63,11 @@ struct insert_samples_worker:public tbb::task {
     tbb::task* execute() override{
         //add mutation of "root"
         for (Mutation_Annotated_Tree::Mutation &m : root->mutations) {
+    #ifdef LITE
+        ins_mut(parent_mutations, m,root->is_leaf());
+    #else
         if(m.is_valid()||root->is_leaf()){ins_mut(parent_mutations, m,root->is_leaf());}
+    #endif
     }
     //output
     if (root->is_leaf()) {
@@ -80,7 +100,11 @@ tbb::task* execute() override{
     tbb::empty_task* empty=new(allocate_continuation()) tbb::empty_task();
     empty->set_ref_count(root->children.size());
     for (const Mutation_Annotated_Tree::Mutation &m : root->mutations) {
-        if(m.is_valid()||root->is_leaf()){ins_mut(parent_mutations, m,root->is_leaf());};
+#ifdef LITE
+        ins_mut(parent_mutations, m,root->is_leaf());
+    #else
+        if(m.is_valid()||root->is_leaf()){ins_mut(parent_mutations, m,root->is_leaf());}
+    #endif
     }
 
     if (root->is_leaf()) {
@@ -97,13 +121,13 @@ tbb::task* execute() override{
                     fprintf(
                         stderr,
                         "[ERROR] Extra mutation to\t%c\%d\t of Sample\t%s at bfs_index %zu \n",
-                        Mutation_Annotated_Tree::get_nuc(m.get_all_major_allele()), m.get_position(),
+                        Mutation_Annotated_Tree::get_nuc(m.get_allele()), m.get_position(),
                         root->identifier.c_str(),root->bfs_index);
             assert(false);
                         
                 } else {
-                    if ((m.get_all_major_allele())!=m_iter->get_all_major_allele()) {
-                        fprintf(stderr, "Mut Nuc Mismatch at \t %d of sample \t %s at bfs_index \t %zu: original \t %c , altered :\t %c \n",m.get_position(),root->identifier.c_str(),root->bfs_index,Mutation_Annotated_Tree::get_nuc(m_iter->get_all_major_allele()),MAT::get_nuc(m.get_all_major_allele()));
+                    if ((m.get_allele())!=m_iter->get_allele()) {
+                        fprintf(stderr, "Mut Nuc Mismatch at \t %d of sample \t %s at bfs_index \t %zu: original \t %c , altered :\t %c \n",m.get_position(),root->identifier.c_str(),root->bfs_index,Mutation_Annotated_Tree::get_nuc(m_iter->get_allele()),MAT::get_nuc(m.get_allele()));
             assert(false);
                         
                     }
@@ -114,7 +138,7 @@ tbb::task* execute() override{
             for (auto m_left : to_check) {
                 fprintf(stderr,
                         "[ERROR] Lost mutation to\t%c\t%d\t of Sample\t%s at bfs_index %zu \n",
-                        Mutation_Annotated_Tree::get_nuc(m_left.get_all_major_allele()),
+                        Mutation_Annotated_Tree::get_nuc(m_left.get_allele()),
                         m_left.get_position(), root->identifier.c_str(),root->bfs_index);
             assert(false);
                         

@@ -1,7 +1,11 @@
 #ifndef Priority_Conflict_Resolver
 #define Priority_Conflict_Resolver
 #include "mutation_annotated_tree.hpp"
+#ifdef LITE
+#include "placement/placement.hpp"
+#else
 #include "tree_rearrangement_internal.hpp"
+#endif
 #include <algorithm>
 #include <atomic>
 #include <cstdio>

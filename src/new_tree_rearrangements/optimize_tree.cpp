@@ -1,8 +1,9 @@
 #include "src/new_tree_rearrangements/mutation_annotated_tree.hpp"
-#include "tree_rearrangement_internal.hpp"
 #include "priority_conflict_resolver.hpp"
+#include "src/new_tree_rearrangements/placement/placement.hpp"
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdio>
 #include <mutex>
 #include <tbb/blocked_range.h>
@@ -12,7 +13,12 @@
 #include <tbb/task.h>
 #include <thread>
 #include <unistd.h>
+#ifdef LITE
+std::condition_variable progress_bar_cv;
+bool timed_print_progress=true;
+#else
 #include "Profitable_Moves_Enumerators/Profitable_Moves_Enumerators.hpp"
+#include "tree_rearrangement_internal.hpp"
 void find_profitable_moves(MAT::Node *src, output_t &out,int radius,
     stack_allocator<Mutation_Count_Change>& allocator
 #ifdef DEBUG_PARSIMONY_SCORE_CHANGE_CORRECT
@@ -21,15 +27,34 @@ void find_profitable_moves(MAT::Node *src, output_t &out,int radius,
 );
 thread_local allocator_state<Mutation_Count_Change> FIFO_allocator_state;
 extern tbb::task_group_context search_context;
+#endif
+//Usher expect parent of condensed node have no mutation, so before outputing usher compatible protobuf,
+//add intermediate nodes to carry mutations of condensed nodes
+void fix_condensed_nodes(MAT::Tree *tree) {
+    std::vector<MAT::Node *> nodes_to_fix;
+    for (auto iter : tree->all_nodes) {
+        if (tree->condensed_nodes.count(iter.first) &&
+            (!iter.second->mutations.empty())) {
+            nodes_to_fix.push_back(iter.second);
+        }
+    }
+    for (auto node : nodes_to_fix) {
+        std::string ori_identifier(node->identifier);
+        tree->rename_node(ori_identifier,
+                          std::to_string(++tree->curr_internal_node));
+        tree->create_node(ori_identifier, node);
+    }
+}
+
 MAT::Node* get_LCA(MAT::Node* src,MAT::Node* dst){
     while (src!=dst) {
         //as dfs index of parent node will always smaller than its children's , so 
         //substitute the node with larger dfs index with its parent and see whether 
         //it will be the same as the other node
-        if (src->dfs_index>dst->dfs_index) {
+        if (src->bfs_index>dst->bfs_index) {
             src=src->parent;
         }
-        else if (src->dfs_index<dst->dfs_index) {
+        else if (src->bfs_index<dst->bfs_index) {
             dst=dst->parent;
         }
     }
@@ -92,6 +117,7 @@ size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
               , Original_State_t origin_states
             #endif
               ) {
+    placement_prep(&t);
     fprintf(stderr, "%zu nodes to search \n", nodes_to_search.size());
     fprintf(stderr, "Node size: %zu\n", bfs_ordered_nodes.size());
     for(auto node:bfs_ordered_nodes){
@@ -117,13 +143,28 @@ size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
 ,&t
 #endif
                        ](tbb::blocked_range<size_t> r) {
+                        #ifndef LITE
                         stack_allocator<Mutation_Count_Change> this_thread_FIFO_allocator(FIFO_allocator_state);
+                        #endif
                           for (size_t i = r.begin(); i < r.end(); i++) {
+                            output_t out;
+                        #ifdef LITE
+                            find_place(nodes_to_search[i], out);
+                            if (i==20) {
+                                fputc('a', stderr);
+                            }
+                            if (!out.empty()) {
+                                  //resolve conflicts
+                                  deferred_nodes.push_back(
+                                      out[0]->get_src());
+                                  resolver(out);
+                            }
+                            checked_nodes.fetch_add(1,std::memory_order_relaxed);
+                        #else
                               if (search_context.is_group_execution_cancelled()) {
                                   break;
                               }
                               if(((!deferred_nodes.size())||(std::chrono::steady_clock::now()-last_save_time)<save_period)&&deferred_nodes.size()<max_queued_moves){
-                              output_t out;
                               find_profitable_moves(nodes_to_search[i], out, radius,this_thread_FIFO_allocator
                               #ifdef DEBUG_PARSIMONY_SCORE_CHANGE_CORRECT
 ,&t
@@ -140,8 +181,13 @@ size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
                               }else{
                                   deferred_nodes.push_back(nodes_to_search[i]);
                               }
+                        #endif
                           }
-                      },search_context);
+                      }
+                      #ifndef LITE
+                      ,search_context
+                      #endif
+                      );
     {
         //stop the progress bar
         //std::unique_lock<std::mutex> done_lock(done_mutex);
@@ -170,28 +216,36 @@ size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
     fputs("Start recycling conflicting moves\n",stderr);
     while (!deferred_moves.empty()) {
         bfs_ordered_nodes=t.breadth_first_expansion();
+        check_clean(bfs_ordered_nodes);
         {Deferred_Move_t deferred_moves_next;
         static FILE* ignored=fopen("/dev/null", "w");
         Conflict_Resolver resolver(bfs_ordered_nodes.size(),deferred_moves_next,ignored);
         if (timed_print_progress) {
             fprintf(stderr,"\rrecycling conflicting moves, %zu left",deferred_moves.size());
         }
+        deferred_moves_next.clear();
         tbb::parallel_for(tbb::blocked_range<size_t>(0,deferred_moves.size()),[&deferred_moves,&resolver,&t](const tbb::blocked_range<size_t>& r){
             for (size_t i=r.begin(); i<r.end(); i++) {
                 MAT::Node* src=t.get_node(deferred_moves[i].first);
                 MAT::Node* dst=t.get_node(deferred_moves[i].second);
                 if (src&&dst) {
                     output_t out;
-                        if (check_not_ancestor(dst, src)) {
+                        if (check_not_ancestor(dst, src)&&src->parent!=dst) {
                             individual_move(src,dst,get_LCA(src, dst),out
                               #ifdef DEBUG_PARSIMONY_SCORE_CHANGE_CORRECT
 ,&t
 #endif
                             );
                         }
+                    #ifdef LITE
+                    if (!out.empty()) {
+                        resolver(out);
+                    }
+                    #else
                     if (!out.moves.empty()) {
                         resolver(out.moves);
                     }
+                    #endif
                 }
                 
             }
@@ -228,12 +282,14 @@ void save_final_tree(MAT::Tree &t, Original_State_t& origin_states,
     check_samples(t.root, origin_states, &t);
 #endif
     std::vector<MAT::Node *> dfs = t.depth_first_expansion();
+#ifndef LITE
     tbb::parallel_for(tbb::blocked_range<size_t>(0, dfs.size()),
                       [&dfs](tbb::blocked_range<size_t> r) {
                           for (size_t i = r.begin(); i < r.end(); i++) {
                                   dfs[i]->mutations.remove_invalid();
                           }
                       });
+#endif
     fix_condensed_nodes(&t);
     fprintf(stderr, "%zu condensed_nodes\n",t.condensed_nodes.size());
     Mutation_Annotated_Tree::save_mutation_annotated_tree(t, output_path);

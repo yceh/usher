@@ -85,9 +85,13 @@ size_t Mutation_Annotated_Tree::Tree::get_parsimony_score() {
     size_t score = 0;
     auto dfs = depth_first_expansion();
     for (auto n: dfs) {
+        #ifdef LITE
+        score+=n->mutations.size();
+        #else
         for (const auto& mut:n->mutations){
             score+=mut.is_valid();
         }
+        #endif
     }
     return score;
 }

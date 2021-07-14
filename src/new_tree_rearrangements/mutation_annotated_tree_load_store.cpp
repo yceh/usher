@@ -362,6 +362,9 @@ Mutation_Annotated_Tree::Tree Mutation_Annotated_Tree::load_mutation_annotated_t
                for (int k = 0; k < mutation_list.mutation_size(); k++) {
                   auto mut = mutation_list.mutation(k);
                   char mut_one_hot=1<<mut.mut_nuc(0);
+                  #ifdef LITE
+                    Mutation m(mut.chromosome(),mut.position(),nuc_one_hot(mut_one_hot),two_bit_to_one_hot(mut.par_nuc()),two_bit_to_one_hot(mut.ref_nuc()));
+                    #else
                   char all_major_alleles=mut_one_hot;
                   if (mut.position()>0) {
                      for (int n = 1; n < mut.mut_nuc_size(); n++) {
@@ -369,7 +372,8 @@ Mutation_Annotated_Tree::Tree Mutation_Annotated_Tree::load_mutation_annotated_t
                      }
                   }
                     Mutation m(mut.chromosome(),mut.position(),nuc_one_hot(mut_one_hot),two_bit_to_one_hot(mut.par_nuc()),all_major_alleles,two_bit_to_one_hot(mut.ref_nuc()));
-                    node->add_mutation(m);
+                    #endif
+                    node->mutations.push_back(m);
                }
                if (!std::is_sorted(node->mutations.begin(), node->mutations.end())) {
                    fprintf(stderr, "WARNING: Mutations not sorted!\n");
@@ -476,10 +480,18 @@ void Mutation_Annotated_Tree::save_mutation_annotated_tree (const Mutation_Annot
 
 Mutation_Annotated_Tree::Mutation::Mutation(const std::string &chromosome,
                                             int position, nuc_one_hot mut,
-                                            nuc_one_hot par, nuc_one_hot tie,
+                                            nuc_one_hot par,
+                                            #ifndef LITE
+                                            nuc_one_hot tie,
+                                            #endif
                                             nuc_one_hot ref)
-    : position(position), par_mut_nuc((par << 4) | (mut)),
-      boundary1_all_major_allele(tie) {
+    : position(position), par_mut_nuc((par << 4) | (mut))
+#ifdef LITE
+    ,descendent_sibling_mut(0),flags(0)
+#else
+      ,boundary1_all_major_allele(tie)
+#endif
+       {
     auto ins_result = chromosome_map.emplace(chromosome, chromosome_map.size());
     if (ins_result.second) {
         std::lock_guard<std::mutex> lk(ref_lock);
@@ -488,7 +500,7 @@ Mutation_Annotated_Tree::Mutation::Mutation(const std::string &chromosome,
     chrom_idx = ins_result.first->second;
     if (ref) {
         std::lock_guard<std::mutex> lk(ref_lock);
-        refs.resize(std::max((int)refs.size(), position + 1));
+        refs.resize(std::max((int)refs.size(), position + 1),0);
         //assert((refs[position].is_invalid()) || refs[position] == ref);
         refs[position] = ref;
     }

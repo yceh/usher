@@ -24,23 +24,6 @@ void add_root(MAT::Tree *tree) {
     old_root->parent=new_root;
     tree->root=new_root;
 }
-//Usher expect parent of condensed node have no mutation, so before outputing usher compatible protobuf,
-//add intermediate nodes to carry mutations of condensed nodes
-void fix_condensed_nodes(MAT::Tree *tree) {
-    std::vector<MAT::Node *> nodes_to_fix;
-    for (auto iter : tree->all_nodes) {
-        if (tree->condensed_nodes.count(iter.first) &&
-            (!iter.second->mutations.empty())) {
-            nodes_to_fix.push_back(iter.second);
-        }
-    }
-    for (auto node : nodes_to_fix) {
-        std::string ori_identifier(node->identifier);
-        tree->rename_node(ori_identifier,
-                          std::to_string(++tree->curr_internal_node));
-        tree->create_node(ori_identifier, node);
-    }
-}
 
 //Use a bloom filter to find nodes carrying mutations that happened twice anywhere in the tree
 static void find_nodes_with_recurrent_mutations(

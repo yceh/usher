@@ -16,6 +16,7 @@ bool Mutation_Annotated_Tree::Node::is_leaf () const {
 }
 
 bool Mutation_Annotated_Tree::Node::is_root() {
+
     return (parent == NULL);
 }
 
@@ -112,6 +113,7 @@ void Mutation_Annotated_Tree::Tree::rename_node(std::string old_nid, std::string
         exit(1);
     }
 }
+#ifndef LITE
 nuc_one_hot get_parent_state(Node* ancestor,int position){
             auto iter = ancestor->mutations.find(position);
     if (iter == ancestor->mutations.end()) {
@@ -129,3 +131,4 @@ nuc_one_hot get_parent_state(Node* ancestor,int position){
         }
     return Mutation::refs[position];
 }
+#endif
