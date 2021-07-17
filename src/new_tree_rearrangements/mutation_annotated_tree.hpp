@@ -105,7 +105,7 @@ namespace Mutation_Annotated_Tree {
         uint8_t par_mut_nuc;
         #ifdef LITE
         uint8_t descendent_sibling_mut; //boundary 1 alleles are alleles with allele count one less than major allele count
-        uint8_t flags;
+        uint8_t tip_distance;
         std::unordered_map<int,char> tip_muts;
         static const char MUT_TIP_MASK=1;
         #else
@@ -119,11 +119,11 @@ namespace Mutation_Annotated_Tree {
         static std::vector<nuc_one_hot> refs;
         #ifdef LITE
         Mutation(const std::string& chromosome,int position,nuc_one_hot mut,nuc_one_hot par,nuc_one_hot ref=0);
-        bool is_mut_tip ()const{
-            return flags&MUT_TIP_MASK;
+        uint8_t get_tip_distance()const{
+            return tip_distance;
         }
-        void set_mut_tip(){
-            flags|=MUT_TIP_MASK;
+        void set_mut_tip(uint8_t tip_distance){
+            this->tip_distance=tip_distance;
         }
         nuc_one_hot get_descendent_mut() const{
             return descendent_sibling_mut>>4;
@@ -138,7 +138,7 @@ namespace Mutation_Annotated_Tree {
             descendent_sibling_mut=(descendent_sibling_mut&0xf0)|sibling;
         }
         void clean_auxilary(){
-            flags=0;
+            tip_distance=255;
             descendent_sibling_mut=0;
         }
         #else

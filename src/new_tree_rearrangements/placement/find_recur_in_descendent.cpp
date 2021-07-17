@@ -6,6 +6,7 @@
 #include <tbb/concurrent_vector.h>
 #include <tbb/task.h>
 #include <vector>
+extern unsigned int search_radius;
 template <typename value_type> class range {
     const value_type* curr;
     const value_type* end;
@@ -21,12 +22,50 @@ template <typename value_type> class range {
     size_t size()const{ return end-curr;}
 };
 namespace MAT = Mutation_Annotated_Tree;
+struct Ancestral_Limit{
+    MAT::Mutation* mut;
+    unsigned int distance;
+    unsigned int last_merge;
+    Ancestral_Limit(MAT::Mutation* mut):mut(mut),distance(0),last_merge(0){}
+    bool increment(bool merged){
+        distance++;
+        if (merged) {
+            last_merge=distance;
+        }
+        if (distance>search_radius) {
+            mut->set_mut_tip(distance);
+        }
+        return false;
+    }
+};
 struct Mut_Related :public MAT::Mutation{
     MAT::Mutation* last_level_mutation;
-    std::array<std::vector<MAT::Mutation*>,4> last_tip_with_state;
-    std::array<MAT::Node*,4> last_tip_updated_node;  
+    std::array<std::vector<Ancestral_Limit>,4> last_tip_with_state;
     Mut_Related (const MAT::Mutation& self, MAT::Mutation* ptr):MAT::Mutation(self){
         last_level_mutation=ptr;
+    }
+    void inc_distance(bool is_merge){
+        for (char nuc_idx=0; nuc_idx<4; nuc_idx++) {
+            auto& nuc_vect=last_tip_with_state[nuc_idx];
+            if (nuc_vect.empty()) {
+                continue;
+            }
+            auto begin=nuc_vect.begin();
+            auto valid_end=nuc_vect.end()-1;
+            while (begin!=valid_end) {
+                if (begin->increment(is_merge)) {
+                    std::swap(begin,valid_end);
+                    valid_end--;
+                }else{
+                    begin++;
+                }
+            }
+            assert(begin==valid_end);
+            if (begin->increment(is_merge)) {
+                valid_end--;
+            }
+            nuc_vect.erase(valid_end+1,nuc_vect.end());
+        }
     }
 };
 struct Heap_Merger {
@@ -56,6 +95,7 @@ struct Heap_Merger {
         int visited=0;
         char all_dec_mut=0;
         bool is_first=true;
+        bool is_merged=false;
         while ((!heap.empty()) && heap.front()->get_position() == output.get_position()) {
             visited++;
             all_dec_mut|=heap.front()->get_descendent_mut();
@@ -68,13 +108,7 @@ struct Heap_Merger {
                 is_first=false;
             }else{
                 for(int i=0;i<4;i++){
-                    if (!heap.front()->last_tip_with_state[i].empty()) {
-                        if (!output.last_tip_with_state[i].empty()) {
-                            output.last_tip_updated_node[i]=this_node;
-                        }else {
-                            output.last_tip_updated_node[i]=heap.front()->last_tip_updated_node[i];
-                        }
-                    }
+                    is_merged|=(!heap.front()->last_tip_with_state[i].empty());
                     output.last_tip_with_state[i].insert(output.last_tip_with_state[i].end(),heap.front()->last_tip_with_state[i].begin(),heap.front()->last_tip_with_state[i].end());
                 }
             }
@@ -115,7 +149,7 @@ struct Heap_Merger {
             }
             to_set[to_set_size-1].last_level_mutation->set_sibling(not_set_stat|forward_acc);
         }
-
+        output.inc_distance(is_merged);
         return output;
     }
     operator bool() const { return !heap.empty(); }
@@ -143,22 +177,20 @@ void set_descendent_alleles(range<Mut_Related> descendent_alleles,
             for(int idx=0;idx<4;idx++){
                 if (mut.get_mut_one_hot()&(1<<idx)) {
                     auto& corresponding_entry=out.back().last_tip_with_state[idx];
+                    //default distance is max radius, so no need to set here
                     corresponding_entry.clear();
                     corresponding_entry.push_back(&mut);
-                    out.back().last_tip_updated_node[idx]=node;
                 }else {
                     if (this_descendent_alleles&(1<<idx)) {                        
                         assert(!descendent_alleles->last_tip_with_state[idx].empty());
                     }
                     out.back().last_tip_with_state[idx]=std::move(descendent_alleles->last_tip_with_state[idx]);
-                    out.back().last_tip_updated_node[idx]=descendent_alleles->last_tip_updated_node[idx];
                 }
             }
             descendent_alleles++;
         }else {
             char bin_idx=one_hot_to_two_bit(mut.get_mut_one_hot());
             out.back().last_tip_with_state[bin_idx].push_back(&mut);
-            out.back().last_tip_updated_node[bin_idx]=node;
         }
         for(int i=0;i<4;i++){
             if (out.back().get_descendent_mut()&(1<<i)) {                
@@ -218,7 +250,6 @@ struct find_descendent_alleles : public tbb::task {
                     child_mut_out.emplace_back(mut,&mut);
                     auto bin_idx = one_hot_to_two_bit(mut.get_mut_one_hot());
                     child_mut_out.back().last_tip_with_state[bin_idx].push_back(&mut);
-                    child_mut_out.back().last_tip_updated_node[bin_idx]=root;
                 }
             } else {
                 tasks.push_back(new (cont->allocate_child())
@@ -233,38 +264,7 @@ struct find_descendent_alleles : public tbb::task {
         return (tasks.empty())?cont:nullptr;
     }
 };
-void placement_prep(MAT::Tree *t) {
+void placement_prep(MAT::Tree *t, unsigned char radius) {
     std::vector<Mut_Related> ignored;
     tbb::task::spawn_root_and_wait(*new (tbb::task::allocate_root()) find_descendent_alleles(t->root, ignored));
-    size_t tip_added=0;
-    size_t tip_missed=0;
-    std::vector<int> have_more_than_one_mut(t->all_nodes.size(),0);
-    for (auto& pos : ignored) {
-        if (pos.get_position()==26144) {
-            std::fputc('a',stderr);
-        }
-        for(int i=0;i<4;i++){
-            if((1<<i)&pos.get_ref_one_hot()){
-                continue;
-            }
-            if (pos.get_descendent_mut()&(1<<i)) {                
-            assert(!pos.last_tip_with_state[i].empty()||(pos.get_ref_one_hot()&(1<<i)));
-            }
-            if (pos.last_tip_with_state[i].size()==1) {
-                pos.last_tip_with_state[i][0]->set_mut_tip();
-                tip_added++;
-            }else if(pos.last_tip_with_state[i].size()>1){
-                have_more_than_one_mut[pos.last_tip_updated_node[i]->bfs_index]++;
-                tip_missed++;
-            }
-        }
-    }
-    FILE* freq_out=fopen("merge_stat", "w");
-    for(auto temp:have_more_than_one_mut){
-        if (temp!=0) {
-            std::fprintf(freq_out,"%d\n",temp);
-        }
-    }
-    std::fclose(freq_out);
-    std::fprintf(stderr,"Tip added: %zu, tip missed %zu\n",tip_added,tip_missed);
 }
