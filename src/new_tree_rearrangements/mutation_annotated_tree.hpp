@@ -122,6 +122,18 @@ namespace Mutation_Annotated_Tree {
         uint8_t get_tip_distance()const{
             return tip_distance;
         }
+        bool decrement_tip_distance(){
+            if (tip_distance) {
+                tip_distance--;
+                return false;
+            }else {
+                descendent_sibling_mut=0;
+                return true;
+            }
+        }
+        bool is_last_mut()const{
+            return !tip_distance;
+        }
         void set_mut_tip(uint8_t tip_distance){
             this->tip_distance=tip_distance;
         }

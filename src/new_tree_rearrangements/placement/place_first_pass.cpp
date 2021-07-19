@@ -36,7 +36,7 @@ void merged_mutation_if_continue_down(
         auto &inserted = mutations_merged.back();
         if (par_mut_iter!=par_mut.end() && (par_mut_iter->get_position() == mut.get_position())) {
             assert(par_mut_iter->get_par_one_hot()==mut.get_par_one_hot());
-            //assert((par_mut_iter->get_descendent_mut()&par_mut_iter->get_mut_one_hot())==(par_mut_iter->get_descendent_mut()&(mut.get_descendent_mut()|mut.get_mut_one_hot())&par_mut_iter->get_mut_one_hot()));
+            assert((par_mut_iter->get_descendent_mut()&par_mut_iter->get_mut_one_hot())==(par_mut_iter->get_descendent_mut()&(mut.get_descendent_mut()|mut.get_mut_one_hot())&par_mut_iter->get_mut_one_hot()));
             if (par_mut_iter->get_mut_one_hot() == mut.get_mut_one_hot()) {
                 // coincide, and a mutation at node consumed that mutation
                 assert(par_mut_iter->get_descendent_mut()&mut.get_mut_one_hot());
@@ -54,7 +54,6 @@ void merged_mutation_if_continue_down(
             inserted.set_par_mut(mut.get_mut_one_hot(),mut.get_par_one_hot());
         }
         assert(inserted.get_mut_one_hot()!=inserted.get_par_one_hot());
-        //cannot test equality directly, as the sample may contain ambiguous mutations
         if (!(inserted.get_mut_one_hot() &
               inserted.get_descendent_mut())) {
             lower_bound++;
@@ -86,10 +85,9 @@ static std::tuple<size_t,size_t,size_t> upward( std::vector<MAT::Mutation>& par_
         while (par_mut_iter!=par_mut.end() && (par_mut_iter->get_position() < mut.get_position())) {
             // mutations needed if placed at parent and no change
             mutations_merged.push_back(*par_mut_iter);
-            if (mutations_merged.back().is_mut_tip()) {
+            if (mutations_merged.back().decrement_tip_distance()) {
                 lower_bound++;
                 side_way_lower_bound++;
-                mutations_merged.back().set_descendent(0);
             }
             assert(!(par_mut_iter->get_mut_one_hot()&par_mut_iter->get_par_one_hot()));
             parsimony_score_if_split_here++;
@@ -99,7 +97,7 @@ static std::tuple<size_t,size_t,size_t> upward( std::vector<MAT::Mutation>& par_
         if (par_mut_iter!=par_mut.end() && (par_mut_iter->get_position() == mut.get_position())) {
             assert(par_mut_iter->get_par_one_hot()==mut.get_mut_one_hot());
             if (par_mut_iter->get_mut_one_hot() == mut.get_par_one_hot()) {
-                assert(!par_mut_iter->is_mut_tip());
+                assert(!par_mut_iter->is_last_mut());
                 // coincide, and a mutation at node consumed that mutation
                 par_mut_iter++;
                 continue;
@@ -130,6 +128,10 @@ static std::tuple<size_t,size_t,size_t> upward( std::vector<MAT::Mutation>& par_
     while (par_mut_iter!=par_mut.end()) {
         mutations_merged.push_back(*par_mut_iter);
         assert(!(par_mut_iter->get_mut_one_hot()&par_mut_iter->get_par_one_hot()));
+        if (mutations_merged.back().decrement_tip_distance()) {
+            lower_bound++;
+            side_way_lower_bound++;
+        }
         parsimony_score_if_split_here++;
         par_mut_iter++;
     }
@@ -180,7 +182,7 @@ static int place_first_pass_helper(
  */
 static void place_first_pass_serial_each_level(
     output_t &output,
-    const std::vector<MAT::Mutation> &mutations, MAT::Node *node,MAT::Node* LCA
+    const std::vector<MAT::Mutation> &mutations, MAT::Node *node,MAT::Node* LCA,unsigned int radius_left
     #ifndef NDEBUG
     ,size_t lower_bound_prev
     #endif
@@ -191,7 +193,7 @@ static void place_first_pass_serial_each_level(
     // go down if can reduce parsimony score
     if (lower_bound < output[0]->score_change) {
         for (auto c : node->children) {
-            place_first_pass_serial_each_level(output, mutations_merged, c,LCA,lower_bound);
+            place_first_pass_serial_each_level(output, mutations_merged, c,LCA,radius_left-1,lower_bound);
         }
     }
 }
@@ -207,7 +209,7 @@ std::tuple<size_t,size_t,size_t> init_mut_vector(MAT::Node* src,std::vector<MAT:
     }
     return std::make_tuple(lower_bound,sibling_bound,0);
 }
-void find_place(MAT::Node* src,output_t &output){
+void find_place(MAT::Node* src,output_t &output,unsigned int radius_left){
     if (src->is_root()) {
         return;
     }
@@ -223,11 +225,11 @@ void find_place(MAT::Node* src,output_t &output){
     auto dummy=new Profitable_Moves;
     dummy->score_change=src->mutations.size();
     output.push_back(dummy);
-    while (this_node) {
+    while (this_node&&radius_left>0) {
         if (std::get<1>(bounds)<output[0]->score_change) {
             for (auto c : this_node->children) {
                 if (c!=last_node) {
-                    place_first_pass_serial_each_level(output, mutations, c,this_node,std::get<1>(bounds));
+                    place_first_pass_serial_each_level(output, mutations, c,this_node,std::get<1>(bounds),radius_left);
                 }
             }
         }
@@ -247,6 +249,7 @@ void find_place(MAT::Node* src,output_t &output){
         get_mutations_relative_to_root(this_node, new_muts);
         compare_mutations(ori_src,new_muts);
         #endif
+        radius_left--;
     }
     if (output[0]->score_change==src->mutations.size()) {
         for (auto move : output) {
