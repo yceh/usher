@@ -105,9 +105,6 @@ static void print_progress(
         fprintf(stderr,"\rchecked %d nodes, estimate %f min left,found %zu nodes "
                "profitable",
                checked_nodes_temp, seconds_left / 60, deferred_nodes->size());
-        if (seconds_left < 60) {
-            break;
-        }
     }
 }
 size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,

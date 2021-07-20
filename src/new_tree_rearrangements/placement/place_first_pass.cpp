@@ -1,8 +1,13 @@
+#include <atomic>
+#include <cstddef>
 #include <tuple>
 #include <utility>
 #include <vector>
 #include "placement.hpp"
 #include "src/new_tree_rearrangements/mutation_annotated_tree.hpp"
+#ifdef PROFILE
+extern std::vector<std::atomic<size_t>> stoped_radius;
+#endif
 typedef std::vector<Profitable_Moves_ptr_t> output_t;
 /**
  * @param[in] node
@@ -191,18 +196,32 @@ static void place_first_pass_serial_each_level(
     ) {
     std::vector<MAT::Mutation> mutations_merged;
     auto lower_bound = place_first_pass_helper(
-        output, mutations, node, mutations_merged,LCA,lower_bound_prev);
+        output, mutations, node, mutations_merged,LCA
+        #ifndef NDEBUG
+        ,lower_bound_prev
+        #endif
+        );
     // go down if can reduce parsimony score
     if (!radius_left) {
+        #ifdef PROFILE
+            stoped_radius[radius_left]++;
+        #endif
         return;
     }
     #ifndef CHECK_BOUND
     if (lower_bound >= output[0]->score_change) {
+        #ifdef PROFILE
+            stoped_radius[radius_left]++;
+        #endif
         return;
     }
     #endif
     for (auto c : node->children) {
-        place_first_pass_serial_each_level(output, mutations_merged, c,LCA,radius_left-1,lower_bound);
+        place_first_pass_serial_each_level(output, mutations_merged, c,LCA,radius_left-1
+        #ifndef NDEBUG
+        ,lower_bound
+        #endif
+        );
     }
 }
 std::tuple<size_t,size_t,size_t> init_mut_vector(MAT::Node* src,std::vector<MAT::Mutation>& out){
@@ -234,13 +253,25 @@ void find_place(MAT::Node* src,output_t &output,unsigned int radius_left){
     dummy->score_change=src->mutations.size();
     output.push_back(dummy);
     while (this_node&&radius_left>0) {
+        #ifndef CHECK_BOUND
         if (std::get<1>(bounds)<output[0]->score_change) {
+        #endif
             for (auto c : this_node->children) {
                 if (c!=last_node) {
-                    place_first_pass_serial_each_level(output, mutations, c,this_node,radius_left,std::get<1>(bounds));
+                    place_first_pass_serial_each_level(output, mutations, c,this_node,radius_left
+        #ifndef NDEBUG
+                    ,std::get<1>(bounds)
+        #endif
+                    );
                 }
             }
+        #ifndef CHECK_BOUND
+        #ifdef PROFILE
+        }else {
+            stoped_radius[radius_left]++;
+        #endif
         }
+        #endif
         mutations_next.clear();
         auto old_lower_bound=std::get<0>(bounds);
         bounds=upward(mutations, this_node,mutations_next);
@@ -248,6 +279,9 @@ void find_place(MAT::Node* src,output_t &output,unsigned int radius_left){
         add_output(std::get<2>(bounds), output, this_node, this_node->parent, mutations_next);
     #ifndef CHECK_BOUND
         if(std::get<0>(bounds)>output[0]->score_change){
+            #ifdef PROFILE
+                stoped_radius[radius_left]++;
+            #endif
             break;
         }
     #endif
@@ -261,6 +295,11 @@ void find_place(MAT::Node* src,output_t &output,unsigned int radius_left){
         #endif
         radius_left--;
     }
+    #ifdef PROFILE
+    if(!radius_left){
+        stoped_radius[radius_left]++;
+    }
+    #endif
     if (output[0]->score_change==src->mutations.size()) {
         for (auto move : output) {
             delete move;

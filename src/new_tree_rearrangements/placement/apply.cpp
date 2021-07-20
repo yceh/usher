@@ -2,6 +2,7 @@
 #include "src/new_tree_rearrangements/check_samples.hpp"
 #include "src/new_tree_rearrangements/mutation_annotated_tree.hpp"
 #include <cstddef>
+#include <cstdio>
 #include <string>
 #include <unordered_set>
 #include <utility>
@@ -38,8 +39,9 @@ void get_mutations_relative_to_root(MAT::Node* node,std::vector<MAT::Mutation>& 
     }
 }
 #endif
+void merge_children(MAT::Node* node,MAT::Tree& tree,std::unordered_set<size_t>& removed_nodes);
 void clean_up_src_par(MAT::Node *par,MAT::Tree* tree,std::unordered_set<size_t>& removed_nodes){
-    if (par->children.size()==1) {
+    if (par->children.size()==1&&(!par->is_root())) {
         std::vector<MAT::Mutation> out;
         auto only_child = par->children[0];
         merge_back(only_child->mutations, par->mutations,out );
@@ -49,10 +51,11 @@ void clean_up_src_par(MAT::Node *par,MAT::Tree* tree,std::unordered_set<size_t>&
         *(std::find(par_children.begin(),par_children.end(),par))=only_child;
         tree->all_nodes.erase(par->identifier);
         removed_nodes.insert((size_t) par);
+        merge_children(only_child, *tree, removed_nodes);
     }
 }
 void merge_children(MAT::Node* node,MAT::Tree& tree,std::unordered_set<size_t>& removed_nodes){
-    if (node->mutations.empty()&&(!node->is_leaf())) {
+    if (node->mutations.empty()&&(!node->is_leaf())&&(!node->is_root())) {
         auto& par_mut=node->parent->children;
         auto this_iter=std::find(par_mut.begin(),par_mut.end(),node);
         *this_iter=node->children[0];
@@ -80,7 +83,7 @@ void compare_mutations(
 }
 void move_node(MAT::Node *src, MAT::Node *dst,
                const std::vector<MAT::Mutation> &mutations_relative_to_parent,
-               size_t parsimony_score, MAT::Tree &tree,std::unordered_set<size_t>& removed_nodes) {
+               size_t parsimony_score, MAT::Tree &tree,std::vector<MAT::Node*>& nodes_may_changed) {
 #ifdef LITE_DETAIL
     std::vector<MAT::Mutation> original_mutations;
     get_mutations_relative_to_root(src, original_mutations);
@@ -120,7 +123,7 @@ void move_node(MAT::Node *src, MAT::Node *dst,
     assert(new_insert_mut.size()==parsimony_score);
     auto& src_par_children=src->parent->children;
     src_par_children.erase(std::find(src_par_children.begin(),src_par_children.end(),src));
-    auto old_src_par=src->parent;
+    nodes_may_changed.push_back(src->parent);
     src->mutations=std::move(new_insert_mut);
     if (shared_mutations.empty()) {
         src->parent=dst->parent;
@@ -144,9 +147,11 @@ void move_node(MAT::Node *src, MAT::Node *dst,
         dst->children.push_back(src);
         src->parent=dst;
     }
-    clean_up_src_par(old_src_par, &tree,removed_nodes);
-    merge_children(src,tree,removed_nodes);
-    merge_children(dst,tree,removed_nodes);
+    if(src->mutations.size()==0&&(!src->is_leaf())){
+        nodes_may_changed.push_back(src);
+    }
+    assert(dst->mutations.size()||dst->is_leaf());
+    src->changed=true;
 #ifdef LITE_DETAIL
     std::vector<MAT::Mutation> new_mutations;
     get_mutations_relative_to_root(src, new_mutations);
@@ -193,13 +198,16 @@ void apply_moves(std::vector<Profitable_Moves_ptr_t> &all_moves, MAT::Tree &t,
 #endif
 ){
     std::unordered_set<size_t> deleted_nodes;
+    std::vector<MAT::Node*> changed_nodes;
     for (auto move : all_moves) {
-        bool src_deleted=deleted_nodes.count((size_t)(move->src));
-        bool dst_deleted=deleted_nodes.count((size_t)(move->get_dst()));
-        if (!(src_deleted||dst_deleted)) {
-            move_node(move->src, move->get_dst(),move->mutations_relative_to_parent,move->score_change,t,deleted_nodes);
+        move_node(move->src, move->get_dst(),move->mutations_relative_to_parent,move->score_change,t,changed_nodes);
+    }
+    for(auto node:changed_nodes){
+        if (deleted_nodes.count((size_t) node)) {
+            continue;
         }
-        delete move;
+        clean_up_src_par(node, &t, deleted_nodes);
+        merge_children(node, t, deleted_nodes);
     }
     tbb::concurrent_vector<MAT::Node *> to_filter_new;
     to_filter_new.reserve(to_filter.size());
@@ -212,8 +220,10 @@ void apply_moves(std::vector<Profitable_Moves_ptr_t> &all_moves, MAT::Tree &t,
     for (auto node : deleted_nodes) {
         delete (MAT::Node*)node;
     }
+#ifdef CHECK_STATE_REASSIGN
     check_samples(t.root, original_state, &t);
     check_clean(t.breadth_first_expansion());
+#endif
 }
 void remove_nodes(MAT::Node* const root,size_t idx,MAT::Tree* tree){
     if (!(root->is_leaf()||root->is_root())) {
@@ -246,7 +256,17 @@ void remove_nodes(MAT::Node* const root,size_t idx,MAT::Tree* tree){
 }
 void check_clean(const std::vector<MAT::Node *> &bfs_ordered_nodes){
     for (const auto node : bfs_ordered_nodes) {
-        assert(node->is_leaf()||node->is_root()||((!node->mutations.empty())&&node->children.size()>1));
+        if (node->is_leaf()||node->is_root()) {
+            continue;
+        }
+        if (node->mutations.empty()) {
+            fprintf(stderr, "node %zu no mutation\n",node);
+            assert(false);
+        }
+        if (node->children.size()==1) {
+            fprintf(stderr, "node %zu no one children\n",node);
+            assert(false);
+        }
     }
 }
 void merge_down(const std::vector<MAT::Mutation>& upper,const std::vector<MAT::Mutation>& lower,std::vector<MAT::Mutation>& out){
