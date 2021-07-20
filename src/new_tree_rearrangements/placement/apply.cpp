@@ -84,9 +84,11 @@ void move_node(MAT::Node *src, MAT::Node *dst,
 #ifdef LITE_DETAIL
     std::vector<MAT::Mutation> original_mutations;
     get_mutations_relative_to_root(src, original_mutations);
-    std::vector<MAT::Mutation> new_mutations(mutations_relative_to_parent);
-    get_mutations_relative_to_root(dst->parent, new_mutations);
-    compare_mutations(original_mutations, new_mutations);
+    std::vector<MAT::Mutation> input_mutations(mutations_relative_to_parent);
+    get_mutations_relative_to_root(dst->parent, input_mutations);
+    compare_mutations(original_mutations, input_mutations);
+    std::vector<MAT::Mutation> dst_mutations;
+    get_mutations_relative_to_root(dst, dst_mutations);
 #endif
     std::vector<MAT::Mutation> shared_mutations;
     std::vector<MAT::Mutation> new_insert_mut;
@@ -145,6 +147,15 @@ void move_node(MAT::Node *src, MAT::Node *dst,
     clean_up_src_par(old_src_par, &tree,removed_nodes);
     merge_children(src,tree,removed_nodes);
     merge_children(dst,tree,removed_nodes);
+#ifdef LITE_DETAIL
+    std::vector<MAT::Mutation> new_mutations;
+    get_mutations_relative_to_root(src, new_mutations);
+    compare_mutations(original_mutations, new_mutations);
+    std::vector<MAT::Mutation> new_dst_mutations;
+    get_mutations_relative_to_root(dst, new_dst_mutations);
+    compare_mutations(dst_mutations, new_dst_mutations);
+
+#endif
 }
 size_t single_move_last_stage(
     const MAT::Node *node,const std::vector<MAT::Mutation>& par_mut) {

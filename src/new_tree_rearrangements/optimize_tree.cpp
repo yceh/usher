@@ -149,7 +149,7 @@ size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
                           for (size_t i = r.begin(); i < r.end(); i++) {
                             output_t out;
                         #ifdef LITE
-                            find_place(nodes_to_search[i], out);
+                            find_place(nodes_to_search[i], out,radius);
                             if (i==20) {
                                 fputc('a', stderr);
                             }

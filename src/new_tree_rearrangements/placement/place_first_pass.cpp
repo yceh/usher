@@ -12,12 +12,14 @@ typedef std::vector<Profitable_Moves_ptr_t> output_t;
  * @param mutations_merged Mutation relative to node, for trying children of node
  * @return Whether there are mutations splitted under the new branching node, if not, for next level of recursion
  */
-void merged_mutation_if_continue_down(
-    const MAT::Node *node, int &lower_bound, int &parsimony_score_if_split_here,
+std::pair<unsigned int,unsigned int> merged_mutation_if_continue_down(
+    const MAT::Node *node,
     const std::vector<MAT::Mutation>& par_mut,
     std::vector<MAT::Mutation>& mutations_merged) {
     auto par_mut_iter=par_mut.begin();
     mutations_merged.reserve(node->mutations.size()+par_mut.size());
+    unsigned int parsimony_score_if_split_here=0;
+    unsigned int lower_bound=0;
     for (const auto &mut : node->mutations) {
         while (par_mut_iter!=par_mut.end() && (par_mut_iter->get_position() < mut.get_position())) {
             // mutations needed if placed at parent and no change
@@ -36,7 +38,7 @@ void merged_mutation_if_continue_down(
         auto &inserted = mutations_merged.back();
         if (par_mut_iter!=par_mut.end() && (par_mut_iter->get_position() == mut.get_position())) {
             assert(par_mut_iter->get_par_one_hot()==mut.get_par_one_hot());
-            assert((par_mut_iter->get_descendent_mut()&par_mut_iter->get_mut_one_hot())==(par_mut_iter->get_descendent_mut()&(mut.get_descendent_mut()|mut.get_mut_one_hot())&par_mut_iter->get_mut_one_hot()));
+            //assert((par_mut_iter->get_descendent_mut()&par_mut_iter->get_mut_one_hot())==(par_mut_iter->get_descendent_mut()&(mut.get_descendent_mut()|mut.get_mut_one_hot())&par_mut_iter->get_mut_one_hot()));
             if (par_mut_iter->get_mut_one_hot() == mut.get_mut_one_hot()) {
                 // coincide, and a mutation at node consumed that mutation
                 assert(par_mut_iter->get_descendent_mut()&mut.get_mut_one_hot());
@@ -71,6 +73,7 @@ void merged_mutation_if_continue_down(
         }
         par_mut_iter++;
     }
+    return std::make_pair(parsimony_score_if_split_here, lower_bound);
 }
 
 
@@ -160,14 +163,13 @@ static int place_first_pass_helper(
     ,size_t old_lower_bound
     #endif
     ) {
-    int lower_bound =
-        0; // lower bound of parsimony score if placed at subtree rooted at node
-    int parsimony_score_if_split_here =
-        0; // parsimony score if placed between node and its parent
     // mutations needed if placed at node
-    merged_mutation_if_continue_down(node, lower_bound,
-                                     parsimony_score_if_split_here,
+    auto res=merged_mutation_if_continue_down(node,
                                      mutations, mutations_merged);
+    auto lower_bound =
+        res.second; // lower bound of parsimony score if placed at subtree rooted at node
+    auto parsimony_score_if_split_here =
+        res.first; // parsimony score if placed between node and its parent
     assert(parsimony_score_if_split_here>=old_lower_bound);
     // output
     add_output(parsimony_score_if_split_here, output, node, LCA, mutations);
@@ -191,10 +193,16 @@ static void place_first_pass_serial_each_level(
     auto lower_bound = place_first_pass_helper(
         output, mutations, node, mutations_merged,LCA,lower_bound_prev);
     // go down if can reduce parsimony score
-    if (lower_bound < output[0]->score_change) {
-        for (auto c : node->children) {
-            place_first_pass_serial_each_level(output, mutations_merged, c,LCA,radius_left-1,lower_bound);
-        }
+    if (!radius_left) {
+        return;
+    }
+    #ifndef CHECK_BOUND
+    if (lower_bound >= output[0]->score_change) {
+        return;
+    }
+    #endif
+    for (auto c : node->children) {
+        place_first_pass_serial_each_level(output, mutations_merged, c,LCA,radius_left-1,lower_bound);
     }
 }
 std::tuple<size_t,size_t,size_t> init_mut_vector(MAT::Node* src,std::vector<MAT::Mutation>& out){
@@ -213,7 +221,7 @@ void find_place(MAT::Node* src,output_t &output,unsigned int radius_left){
     if (src->is_root()) {
         return;
     }
-    #ifdef LITE_DETAIL
+    #ifdef LITE_DETAIL_SEARCH
     std::vector<MAT::Mutation> ori_src;
     get_mutations_relative_to_root(src,ori_src);
     #endif
@@ -229,7 +237,7 @@ void find_place(MAT::Node* src,output_t &output,unsigned int radius_left){
         if (std::get<1>(bounds)<output[0]->score_change) {
             for (auto c : this_node->children) {
                 if (c!=last_node) {
-                    place_first_pass_serial_each_level(output, mutations, c,this_node,std::get<1>(bounds),radius_left);
+                    place_first_pass_serial_each_level(output, mutations, c,this_node,radius_left,std::get<1>(bounds));
                 }
             }
         }
@@ -238,13 +246,15 @@ void find_place(MAT::Node* src,output_t &output,unsigned int radius_left){
         bounds=upward(mutations, this_node,mutations_next);
         assert(std::get<2>(bounds)>=old_lower_bound);
         add_output(std::get<2>(bounds), output, this_node, this_node->parent, mutations_next);
+    #ifndef CHECK_BOUND
         if(std::get<0>(bounds)>output[0]->score_change){
             break;
         }
+    #endif
         mutations=std::move(mutations_next);
         last_node=this_node;
         this_node=this_node->parent;
-        #ifdef LITE_DETAIL
+        #ifdef LITE_DETAIL_SEARCH
         std::vector<MAT::Mutation> new_muts(mutations);
         get_mutations_relative_to_root(this_node, new_muts);
         compare_mutations(ori_src,new_muts);

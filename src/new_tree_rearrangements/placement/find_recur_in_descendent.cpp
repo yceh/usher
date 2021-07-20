@@ -1,5 +1,6 @@
 #include "../mutation_annotated_tree.hpp"
 #include <algorithm>
+#include <atomic>
 #include <bits/types/FILE.h>
 #include <cstdio>
 #include <mutex>
@@ -7,6 +8,9 @@
 #include <tbb/task.h>
 #include <vector>
 extern unsigned int search_radius;
+extern std::vector<std::atomic<size_t>> early_stop_down_saving;
+extern std::vector<std::atomic<size_t>> early_stop_up_saving;
+extern std::vector<std::atomic<size_t>> early_stop_sibling_saving;
 template <typename value_type> class range {
     const value_type* curr;
     const value_type* end;
@@ -32,8 +36,8 @@ struct Ancestral_Limit{
         if (merged) {
             last_merge=distance;
         }
-        if (distance>search_radius) {
-            mut->set_mut_tip(distance);
+        if (distance>(search_radius+1)) {
+            mut->set_mut_tip(last_merge);
         }
         return false;
     }
@@ -180,10 +184,10 @@ void set_descendent_alleles(range<Mut_Related> descendent_alleles,
                     //default distance is max radius, so no need to set here
                     corresponding_entry.clear();
                     corresponding_entry.push_back(&mut);
-                }else {
-                    if (this_descendent_alleles&(1<<idx)) {                        
-                        assert(!descendent_alleles->last_tip_with_state[idx].empty());
-                    }
+                }else if (mut.get_par_one_hot()&(1<<idx)) {
+                    out.back().last_tip_with_state[idx].clear();
+                }
+                else {
                     out.back().last_tip_with_state[idx]=std::move(descendent_alleles->last_tip_with_state[idx]);
                 }
             }
@@ -264,7 +268,14 @@ struct find_descendent_alleles : public tbb::task {
         return (tasks.empty())?cont:nullptr;
     }
 };
-void placement_prep(MAT::Tree *t, unsigned char radius) {
+void placement_prep(MAT::Tree *t) {
     std::vector<Mut_Related> ignored;
     tbb::task::spawn_root_and_wait(*new (tbb::task::allocate_root()) find_descendent_alleles(t->root, ignored));
+    for (auto& pos : ignored) {
+        for (char base_idx=0; base_idx<4; base_idx++) {
+            for(auto& mut:pos.last_tip_with_state[base_idx]){
+                mut.mut->set_mut_tip(mut.last_merge);
+            }
+        }
+    }
 }

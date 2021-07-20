@@ -106,7 +106,6 @@ namespace Mutation_Annotated_Tree {
         #ifdef LITE
         uint8_t descendent_sibling_mut; //boundary 1 alleles are alleles with allele count one less than major allele count
         uint8_t tip_distance;
-        std::unordered_map<int,char> tip_muts;
         static const char MUT_TIP_MASK=1;
         #else
         uint8_t boundary1_all_major_allele; //boundary 1 alleles are alleles with allele count one less than major allele count

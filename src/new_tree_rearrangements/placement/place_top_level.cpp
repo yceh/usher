@@ -3,15 +3,18 @@
 #include "placement.hpp"
 #include "src/new_tree_rearrangements/mutation_annotated_tree.hpp"
 #include <cstdio>
+#include <cstdlib>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
 #include <tbb/partitioner.h>
 #include <utility>
 #include <vector>
+unsigned int search_radius;
 MAT::Node* get_LCA(MAT::Node* src,MAT::Node* dst);
 int main(int argc, char **argv) {
     MAT::Tree tree = MAT::load_mutation_annotated_tree(argv[1]);
+    search_radius=atoi(argv[2]);
     Original_State_t ori_state;
     check_samples(tree.root, ori_state, &tree);
     remove_nodes(tree.root,0,&tree);
@@ -28,7 +31,7 @@ int main(int argc, char **argv) {
     while(true){
     size_t par_score;
     while (!nodes_to_search.empty()) {
-        par_score=optimize_tree(bfs_ordered_nodes, nodes_to_search, tree, 10, log
+        par_score=optimize_tree(bfs_ordered_nodes, nodes_to_search, tree, search_radius, log
 #ifndef NDEBUG
                       ,
                       ori_state

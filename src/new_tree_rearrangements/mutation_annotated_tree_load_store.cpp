@@ -487,7 +487,7 @@ Mutation_Annotated_Tree::Mutation::Mutation(const std::string &chromosome,
                                             nuc_one_hot ref)
     : position(position), par_mut_nuc((par << 4) | (mut))
 #ifdef LITE
-    ,descendent_sibling_mut(0),flags(0)
+    ,descendent_sibling_mut(0),tip_distance(255)
 #else
       ,boundary1_all_major_allele(tie)
 #endif

@@ -33,7 +33,7 @@ struct Profitable_Moves{
 };
 typedef Profitable_Moves* Profitable_Moves_ptr_t;
 typedef std::vector<Profitable_Moves_ptr_t> output_t;
-void find_place(MAT::Node* src,output_t &output);
+void find_place(MAT::Node* src,output_t &output,unsigned int radius_left);
 void placement_prep(MAT::Tree *t);
 void check_descendent(MAT::Tree& tree);
 void get_mutations_relative_to_root(MAT::Node* node,std::vector<MAT::Mutation>& muts);
