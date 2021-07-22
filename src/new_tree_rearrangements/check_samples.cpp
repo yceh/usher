@@ -30,7 +30,7 @@ void ins_mut(Mutation_Set &parent_mutations,const Mutation_Annotated_Tree::Mutat
     #endif
     if (!temp.second) {
         //already present
-        assert(temp.first->get_mut_one_hot()==m.get_par_one_hot());
+        //assert(temp.first->get_mut_one_hot()==m.get_par_one_hot());
         //mutate back to ref, so no more mutation
         if ((m.get_mut_one_hot() == m.get_ref_one_hot()&&(!is_leaf))||(m.get_allele()==m.get_ref_one_hot())) {
             parent_mutations.erase(temp.first);
@@ -42,12 +42,12 @@ void ins_mut(Mutation_Set &parent_mutations,const Mutation_Annotated_Tree::Mutat
     #endif
         }
     } else {
-        assert(m.get_par_one_hot() == m.get_ref_one_hot());
-        assert(m.get_mut_one_hot() != m.get_par_one_hot()
+        //assert(m.get_par_one_hot() == m.get_ref_one_hot());
+        //assert(m.get_mut_one_hot() != m.get_par_one_hot()
     #ifndef LITE
         ||!m.is_valid()
     #endif
-        );
+        //);
     }
 }
 //functor for getting state of all leaves
