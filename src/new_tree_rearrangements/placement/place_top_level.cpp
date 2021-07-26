@@ -4,13 +4,17 @@
 #include "src/new_tree_rearrangements/mutation_annotated_tree.hpp"
 #include <algorithm>
 #include <cstddef>
+#include <tbb/task_scheduler_init.h>
 #include <cstdio>
 #include <cstdlib>
+#include <iostream>
 #include <random>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_vector.h>
 #include <tbb/parallel_for.h>
+#include <boost/program_options.hpp> 
 #include <tbb/partitioner.h>
+#include <boost/program_options/value_semantic.hpp>
 #include <utility>
 #include <vector>
 #ifdef PROFILE
@@ -70,9 +74,39 @@ void find_nodes_to_move(const std::vector<MAT::Node *> &bfs_ordered_nodes,
 }
 unsigned int search_radius;
 MAT::Node* get_LCA(MAT::Node* src,MAT::Node* dst);
+namespace po = boost::program_options;
 int main(int argc, char **argv) {
-    MAT::Tree tree = MAT::load_mutation_annotated_tree(argv[1]);
-    search_radius=atoi(argv[2]);
+    std::string output_path;
+    std::string input_pb_path;
+    po::options_description desc{"Options"};
+    uint32_t num_cores = tbb::task_scheduler_init::default_num_threads();
+    uint32_t num_threads;
+    std::string num_threads_message = "Number of threads to use when possible [DEFAULT uses all available cores, " + std::to_string(num_cores) + " detected on this machine]";
+    desc.add_options()
+        ("threads,T", po::value<uint32_t>(&num_threads)->default_value(num_cores), num_threads_message.c_str())
+        ("load-mutation-annotated-tree,i", po::value<std::string>(&input_pb_path)->default_value(""), "Load mutation-annotated tree object")
+        ("save-mutation-annotated-tree,o", po::value<std::string>(&output_path)->required(), "Save output mutation-annotated tree object to the specified filename [REQUIRED]")
+        ("radius,r", po::value<unsigned int>(&search_radius)->default_value(10),
+         "Radius in which to restrict the SPR moves.");
+        
+    po::options_description all_options;
+    all_options.add(desc);
+    po::variables_map vm;
+    try{
+        po::store(po::command_line_parser(argc, argv).options(all_options).run(), vm);
+        po::notify(vm);
+    }
+    catch(std::exception &e){
+        std::cerr << desc << std::endl;
+        // Return with error code 1 unless the user specifies help
+        if(vm.count("help"))
+            return 0;
+        else
+            return 1;
+    }
+    tbb::task_scheduler_init init(num_threads);
+
+    MAT::Tree tree = MAT::load_mutation_annotated_tree(input_pb_path.c_str());
     #ifdef PROFILE
     stoped_radius=std::vector<std::atomic<size_t>>(search_radius+1);
     #endif
@@ -111,7 +145,7 @@ int main(int argc, char **argv) {
     }
     find_nodes_to_move(bfs_ordered_nodes, nodes_to_search, false, search_radius);
     }
-    save_final_tree(tree, ori_state, "out.pb");
+    save_final_tree(tree, ori_state, output_path.c_str());
     tree.delete_nodes();
 #ifdef PROFILE
     for (unsigned int i=0; i<=search_radius; i++) {
