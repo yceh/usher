@@ -2,6 +2,7 @@
 #include "../priority_conflict_resolver.hpp"
 #include "placement.hpp"
 #include "src/new_tree_rearrangements/mutation_annotated_tree.hpp"
+#include <algorithm>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -40,10 +41,10 @@ static void check_changed_neighbor(int radius, MAT::Node* root, MAT::Node* exclu
 void find_nodes_to_move(const std::vector<MAT::Node *> &bfs_ordered_nodes,
                         tbb::concurrent_vector<MAT::Node *> &output,
                         bool is_first, int radius) {
-    auto start=std::chrono::steady_clock::now();
-    if (is_first) {
+    //auto start=std::chrono::steady_clock::now();
+    //if (is_first) {
         output=tbb::concurrent_vector<MAT::Node*>(bfs_ordered_nodes.begin(),bfs_ordered_nodes.end());
-    }else{
+    /*}else{
     output.reserve(bfs_ordered_nodes.size());
     tbb::parallel_for(tbb::blocked_range<size_t>(0,bfs_ordered_nodes.size()),[&bfs_ordered_nodes,is_first,radius,&output](const tbb::blocked_range<size_t>& r){
         for (size_t idx=r.begin(); idx<r.end(); idx++) {
@@ -65,14 +66,16 @@ void find_nodes_to_move(const std::vector<MAT::Node *> &bfs_ordered_nodes,
     std::shuffle(output.begin(), output.end(), g);
     fprintf(stderr, "Will search %f of nodes\n",(double)output.size()/(double)bfs_ordered_nodes.size());
     std::chrono::duration<double> elapsed_seconds = std::chrono::steady_clock::now()-start;
-    fprintf(stderr, "Took %f s to find nodes to move\n",elapsed_seconds.count());
+    fprintf(stderr, "Took %f s to find nodes to move\n",elapsed_seconds.count());*/
 }
 unsigned int search_radius;
 MAT::Node* get_LCA(MAT::Node* src,MAT::Node* dst);
 int main(int argc, char **argv) {
     MAT::Tree tree = MAT::load_mutation_annotated_tree(argv[1]);
     search_radius=atoi(argv[2]);
+    #ifdef PROFILE
     stoped_radius=std::vector<std::atomic<size_t>>(search_radius+1);
+    #endif
     Original_State_t ori_state;
     check_samples(tree.root, ori_state, &tree);
     remove_nodes(tree.root,0,&tree);
@@ -111,7 +114,7 @@ int main(int argc, char **argv) {
     save_final_tree(tree, ori_state, "out.pb");
     tree.delete_nodes();
 #ifdef PROFILE
-    for (int i=0; i<=search_radius; i++) {
+    for (unsigned int i=0; i<=search_radius; i++) {
         fprintf(stderr, "%zu\n",stoped_radius[i].load());
     }
 #endif

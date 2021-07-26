@@ -1,6 +1,7 @@
 #ifndef LITE_HEADER
 #define LITE_HEADER
 #include "../check_samples.hpp"
+#include "../stack_allocator.hpp"
 #include "../mutation_annotated_tree.hpp"
 namespace MAT = Mutation_Annotated_Tree;
 struct Profitable_Moves{
@@ -33,7 +34,7 @@ struct Profitable_Moves{
 };
 typedef Profitable_Moves* Profitable_Moves_ptr_t;
 typedef std::vector<Profitable_Moves_ptr_t> output_t;
-void find_place(MAT::Node* src,output_t &output,unsigned int radius_left);
+void find_place(MAT::Node* src,output_t &output,unsigned int radius_left,stack_allocator<MAT::Mutation>& allocator);
 void placement_prep(MAT::Tree *t);
 void check_descendent(MAT::Tree& tree);
 void get_mutations_relative_to_root(MAT::Node* node,std::vector<MAT::Mutation>& muts);

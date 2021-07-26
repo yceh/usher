@@ -14,6 +14,7 @@
 #include <thread>
 #include <unistd.h>
 #ifdef LITE
+thread_local allocator_state<MAT::Mutation> FIFO_allocator_state;
 std::condition_variable progress_bar_cv;
 bool timed_print_progress=true;
 #else
@@ -140,13 +141,15 @@ size_t optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
 ,&t
 #endif
                        ](tbb::blocked_range<size_t> r) {
-                        #ifndef LITE
+                        #ifdef LITE
+                        stack_allocator<MAT::Mutation> this_thread_FIFO_allocator(FIFO_allocator_state);
+                        #else
                         stack_allocator<Mutation_Count_Change> this_thread_FIFO_allocator(FIFO_allocator_state);
                         #endif
                           for (size_t i = r.begin(); i < r.end(); i++) {
                             output_t out;
                         #ifdef LITE
-                            find_place(nodes_to_search[i], out,radius);
+                            find_place(nodes_to_search[i], out,radius,this_thread_FIFO_allocator);
                             if (i==20) {
                                 fputc('a', stderr);
                             }

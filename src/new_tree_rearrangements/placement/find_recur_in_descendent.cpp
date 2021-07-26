@@ -96,7 +96,7 @@ struct Heap_Merger {
         Mut_Related output(*heap.front());
         std::vector<Mut_Related> to_set;
         char not_set_stat=0;
-        int visited=0;
+        size_t visited=0;
         char all_dec_mut=0;
         bool is_first=true;
         bool is_merged=false;

@@ -60,7 +60,7 @@ void merge_children(MAT::Node* node,MAT::Tree& tree,std::unordered_set<size_t>& 
         auto this_iter=std::find(par_mut.begin(),par_mut.end(),node);
         *this_iter=node->children[0];
         node->children[0]->parent=node->parent;
-        for(int idx=1;idx<node->children.size();idx++){
+        for(size_t idx=1;idx<node->children.size();idx++){
             node->children[idx]->parent=node->parent;
             par_mut.push_back(node->children[idx]);
         }
@@ -72,6 +72,7 @@ void merge_children(MAT::Node* node,MAT::Tree& tree,std::unordered_set<size_t>& 
 void compare_mutations(
     std::vector<MAT::Mutation> &original_mutations,
     std::vector<MAT::Mutation> &new_mutations) {
+    #ifndef NDEBUG
     auto new_mut_iter=new_mutations.begin();
     for (const auto &mut : original_mutations) {
         assert(mut.get_position() == new_mut_iter->get_position() &&
@@ -80,6 +81,7 @@ void compare_mutations(
         new_mut_iter++;
     }
     assert(new_mut_iter==new_mutations.end());
+    #endif
 }
 void move_node(MAT::Node *src, MAT::Node *dst,
                const std::vector<MAT::Mutation> &mutations_relative_to_parent,
