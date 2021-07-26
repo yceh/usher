@@ -1,7 +1,7 @@
 #include "../mutation_annotated_tree.hpp"
 #include <algorithm>
 #include <atomic>
-#include <bits/types/FILE.h>
+#include <cstdio>
 #include <cstdio>
 #include <mutex>
 #include <tbb/concurrent_vector.h>
