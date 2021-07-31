@@ -17,7 +17,7 @@ configure_file(src/version.hpp.in version.hpp)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -msse4.1 -std=c++11 -Wall -g -Wno-unused-function -Wno-deprecated-declarations")
 #-DDEBUG_PARSIMONY_SCORE_CHANGE_CORRECT 
-set(CMAKE_CXX_FLAGS_DEBUG "-O3 -fsanitize=address")
+set(CMAKE_CXX_FLAGS_DEBUG "-O0 -fsanitize=address ")
 set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-DNDEBUG -O3")
 set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3")
 set(CMAKE_INCLUDE_CURRENT_DIR ON) 
@@ -207,6 +207,19 @@ else()
         ${DETAILED_MUTATIONS_PROTO_SRCS}
         ${DETAILED_MUTATIONS_PROTO_HDRS}
         )
+    add_executable(reduce_back_mutation_count
+        src/matOptimize/mutation_annotated_tree.cpp
+        src/matOptimize/mutation_annotated_tree_node.cpp
+        src/matOptimize/Mutation_Collection.cpp
+        src/matOptimize/mutation_annotated_tree_load_store.cpp
+        src/matOptimize/mutation_annotated_tree_nuc_util.cpp
+        src/matOptimize/minimize_back_mutation.cpp
+        src/matOptimize/check_samples.cpp
+        src/matOptimize/Fitch_Sankoff.cpp
+        src/matOptimize/Fitch_Sankoff_Minimize_Back_Mutations.cpp
+        ${PROTO_SRCS}
+        ${PROTO_HDRS}
+        )
         add_executable(transpose_vcf
         src/matOptimize/transpose_vcf/transpose_vcf_encode.cpp
         src/matOptimize/mutation_annotated_tree_nuc_util.cpp
@@ -234,6 +247,7 @@ endif(SAVE_PROFILE)
 #set_property(TARGET matOptimize PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 TARGET_LINK_LIBRARIES(compareVCF PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
 TARGET_LINK_LIBRARIES(matOptimize PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
+TARGET_LINK_LIBRARIES(reduce_back_mutation_count PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
 TARGET_LINK_LIBRARIES(transpose_vcf PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
 TARGET_LINK_LIBRARIES(transposed_vcf_to_vcf PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
 
