@@ -60,7 +60,7 @@ static int update_info_per_allele(const backward_info &child_info,
     out.add_other_mutations(par_allele, child_info[best_allele]);
     // Add one mutation for parent node to child node
     if (par_allele != best_allele) {
-        out.get_mut_count(best_allele, par_allele)++;
+        out.get_total_muts_to_particular_allele(best_allele)++;
     }
     return best_allele;
 }

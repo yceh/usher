@@ -1,5 +1,6 @@
 #include "mutation_annotated_tree.hpp"
 #include <cstddef>
+#include <cstdint>
 #include <tbb/concurrent_vector.h>
 struct backward_pass_range{
     union{

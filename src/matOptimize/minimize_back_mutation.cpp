@@ -1,6 +1,7 @@
 #include "mutation_annotated_tree.hpp"
 #include "src/matOptimize/check_samples.hpp"
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdio>
 #include <tbb/blocked_range.h>
@@ -8,10 +9,26 @@
 #include <tbb/parallel_for_each.h>
 #include "Fitch_Sankoff.hpp"
 #include <tbb/task.h>
+#include <thread>
 #include <vector>
 #include "min_back.hpp"
+#include "src/matOptimize/tree_rearrangement_internal.hpp"
 namespace MAT = Mutation_Annotated_Tree;
 std::atomic<size_t> back_mutation_count;
+std::atomic<std::size_t> assigned_count;
+std::condition_variable progress_bar_cv;
+void print_progress(std::atomic<bool>* done,std::mutex* done_mutex){
+    while (true) {
+        {
+            std::unique_lock<std::mutex> lk(*done_mutex);
+            progress_bar_cv.wait_for(lk,std::chrono::seconds(1));
+            if (done->load()) {
+                return;
+            }
+        }
+        fprintf(stderr,"\rAssigned %zu locus",assigned_count.load(std::memory_order_relaxed));
+    }
+}
 static MAT::Mutations_Collection merge_mutation(const MAT::Mutations_Collection& parent,const MAT::Mutations_Collection& this_node){
     MAT::Mutations_Collection merged;
     merged.reserve(parent.size()+this_node.size());
@@ -95,6 +112,10 @@ int main (int argc, char** argv){
     Fitch_Sankoff_prep(bfs_ordered_nodes,child_idx_range, parent_idx);
     std::vector<tbb::concurrent_vector<Mutation_Annotated_Tree::Mutation>>
         output(bfs_ordered_nodes.size());
+    std::atomic<bool> done(false);
+    std::mutex done_mutex;
+    std::thread progress_meter(print_progress,&done,&done_mutex);
+    assigned_count.store(0);
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0,pos_mutated.size()),
         [&output,&child_idx_range,&parent_idx,&pos_mutated](const tbb::blocked_range<size_t>& in) {
@@ -112,12 +133,14 @@ int main (int argc, char** argv){
                 mutated_nodes_idx.emplace_back(0,0xf);
                 Fitch_Sankoff_Minimize_back_mutation(child_idx_range,parent_idx, pos_mutated[idx].first,output, mutated_nodes_idx
                 ,FS_containers.score_vec,FS_containers.best_allele);
-                //,score_vec,best_allele);
-    
+                //,score_vec,best_allele);    
             }
+            assigned_count+=in.size();
         });
     tbb::affinity_partitioner ap;
     //sort and fill
+    done=true;
+    progress_bar_cv.notify_all();
     tbb::parallel_for(
         tbb::blocked_range<size_t>(0, bfs_ordered_nodes.size()),
         [&bfs_ordered_nodes, &output](tbb::blocked_range<size_t> r) {
@@ -133,6 +156,7 @@ int main (int argc, char** argv){
     auto new_mut_count=tree.get_parsimony_score();
     auto new_back_mutation_count=get_back_mutations_count(tree);
     fprintf(stderr, "New parsimony score: %zu, new mutation count %zu\n ",new_mut_count,new_back_mutation_count);
+    fix_condensed_nodes(&tree);
     MAT::save_mutation_annotated_tree(tree, argv[2]);
-
+    progress_meter.join();
 }

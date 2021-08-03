@@ -3,34 +3,27 @@
 #include <cstring>
 struct backward_info_per_allele {
   private:
-    unsigned int mutations[4][4]; //[par_nuc][mut_nuc]
+    unsigned int mut_nuc_count[4]; //[par_nuc][mut_nuc]
   public:
     unsigned int back_mutations_count;
     unsigned int parsimony;
-    unsigned int get_mut_count(uint8_t mut_nuc, uint8_t par_nuc) const {
-        return mutations[par_nuc][mut_nuc];
-    }
-    unsigned int &get_mut_count(uint8_t mut_nuc, uint8_t par_nuc) {
-        return mutations[par_nuc][mut_nuc];
-    }
+
     unsigned int get_total_muts_to_particular_allele(uint8_t mut_nuc) const {
-        unsigned int out = 0;
-        for (int par_nuc = 0; par_nuc < 4; par_nuc++) {
-            out += get_mut_count(mut_nuc, par_nuc);
-        }
-        return out;
+        return mut_nuc_count[mut_nuc];
     }
+
+    unsigned int& get_total_muts_to_particular_allele(uint8_t mut_nuc) {
+        return mut_nuc_count[mut_nuc];
+    }
+
     void add_other_mutations(uint8_t excluded_mut_nuc,
                              const backward_info_per_allele &other) {
-        for (int par_nuc = 0; par_nuc < 4; par_nuc++) {
-            // add the rest toghether
             for (int mut_nuc = 0; mut_nuc < 4; mut_nuc++) {
-                get_mut_count(mut_nuc, par_nuc) +=
+                get_total_muts_to_particular_allele(mut_nuc) +=
                     (mut_nuc == excluded_mut_nuc)
                         ? 0
-                        : other.get_mut_count(mut_nuc, par_nuc);
+                        : other.get_total_muts_to_particular_allele(mut_nuc);
             }
-        }
     }
     void clear() {
         /*for (int par_nuc = 0; par_nuc < 4; par_nuc++) {
@@ -38,7 +31,7 @@ struct backward_info_per_allele {
                 get_mut_count(mut_nuc, par_nuc)=0;
             }
         }*/
-        memset(mutations, 0,sizeof(unsigned int)*16);
+        memset(mut_nuc_count, 0,sizeof(unsigned int)*4);
         back_mutations_count=0;
     }
 };
