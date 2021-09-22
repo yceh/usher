@@ -14,6 +14,7 @@
 #include <cstdlib>
 #include <ctime>
 //#include <malloc.h>
+#include <fstream>
 #include <limits>
 #include <tbb/concurrent_vector.h>
 #include <tbb/task.h>
@@ -91,7 +92,7 @@ int main(int argc, char **argv) {
     unsigned int minutes_between_save;
     int max_round;
     float min_improvement;
-
+    std::string nodes_to_search_file;
     po::options_description desc{"Options"};
     uint32_t num_cores = tbb::task_scheduler_init::default_num_threads();
     std::string num_threads_message = "Number of threads to use when possible [DEFAULT uses all available cores, " + std::to_string(num_cores) + " detected on this machine]";
@@ -118,6 +119,7 @@ int main(int argc, char **argv) {
     ("transposed-vcf-path,V",po::value(&transposed_vcf_path)->default_value(""),"Auxiliary transposed VCF for ambiguous bases, used in combination with usher protobuf (-i)")
     ("version", "Print version number")
     ("drift_iter,d",po::value(&drift_iter)->default_value(1),"Number of iteration to continue if no parsimony improvement")
+    ("nodes_to_search,z",po::value(&nodes_to_search_file),"Number of iteration to continue if no parsimony improvement")
     ("help,h", "Print help messages");
 
     po::options_description all_options;
@@ -289,7 +291,6 @@ int main(int argc, char **argv) {
     last_save_time=std::chrono::steady_clock::now();
     size_t new_score;
     size_t score_before;
-    int stalled = 0;
 
 #ifndef NDEBUG
     check_samples(t.root, origin_states, &t);
@@ -309,36 +310,23 @@ int main(int argc, char **argv) {
         movalbe_src_log=fopen("/dev/null", "w");
     }
     fprintf(movalbe_src_log, "source\tdestination\titeration\tscore.change\tdistance\tsubtree.size\n");
-    bool isfirst=true;
     bool allow_drift=false;
     int iteration=1;
-    size_t nodes_seached_last_iter=0;
-    size_t nodes_seached_this_iter=0;
-    while(stalled<drift_iter) {
-        if (interrupted) {
-            break;
-        }
         bfs_ordered_nodes = t.breadth_first_expansion();
-        fputs("Start Finding nodes to move \n",stderr);
-        find_nodes_to_move(bfs_ordered_nodes, nodes_to_search,isfirst,radius,t);
-        if (radius<0&&(isfirst||nodes_seached_this_iter>nodes_seached_last_iter)) {
-            radius*=2;
-            nodes_seached_last_iter=nodes_seached_this_iter;
-        }
-        isfirst=false;
-        fprintf(stderr,"%zu nodes to search\n",nodes_to_search.size());
-        if (allow_drift) {
-            nodes_to_search=tbb::concurrent_vector<MAT::Node *>(bfs_ordered_nodes.begin(),bfs_ordered_nodes.end());
-        }
-        if (nodes_to_search.empty()) {
-            break;
+        if (nodes_to_search_file=="") {
+            nodes_to_search=tbb::concurrent_vector<MAT::Node *>(bfs_ordered_nodes.begin(),bfs_ordered_nodes.end());        
+        }else {
+            std::ifstream nodes_file(nodes_to_search_file);
+            std::string node_name;
+            while (nodes_file) {
+                getline(nodes_file,node_name);
+                auto node=t.get_node(node_name);
+                if (node) {
+                    nodes_to_search.push_back(node);
+                }        
+            }
         }
         //Actual optimization loop
-        bool searched_full=true;
-        while (!nodes_to_search.empty()) {
-            if (interrupted) {
-                break;
-            }
             bfs_ordered_nodes = t.breadth_first_expansion();
             if (max_optimize_hours) {
                 save_period=std::min(ori_save_period,end_time-std::chrono::steady_clock::now());
@@ -351,56 +339,12 @@ int main(int argc, char **argv) {
                               , origin_states
 #endif
                              );
-            if (max_optimize_hours&&(std::chrono::steady_clock::now()-start_time>max_optimize_duration)) {
-                interrupted=true;
-                break;
-            }
             new_score=res.first;
-            if (searched_full) {
-                nodes_seached_this_iter=res.second;
-                searched_full=false;
-            }
             fprintf(stderr, "parsimony score after optimizing: %zu,with radius %d, searched %zu arcs, second from start %ld \n\n",
                     new_score,std::abs(radius),res.second,std::chrono::duration_cast<std::chrono::seconds>(std::chrono::steady_clock::now()-start_time).count());
-            auto save_start=std::chrono::steady_clock::now();
-            if(std::chrono::steady_clock::now()-last_save_time>=save_period) {
-                if(!no_write_intermediate) {
-                    intermediate_writing=intermediate_template;
-                    make_output_path(intermediate_writing);
-                    t.save_detailed_mutations(intermediate_writing);
-                    rename(intermediate_writing.c_str(), intermediate_pb_base_name.c_str());
-                    last_save_time=std::chrono::steady_clock::now();
-                    fprintf(stderr, "Took %lldsecond to save intermediate protobuf\n",std::chrono::duration_cast<std::chrono::seconds>(last_save_time-save_start).count());
-                }
-                last_save_time=std::chrono::steady_clock::now();
-            }
-        }
-        float improvement=1-((float)new_score/(float)score_before);
-        fprintf(stderr, "Last round improvement %f\n",improvement);
-        if (improvement <min_improvement ) {
-            if (nodes_seached_this_iter>nodes_seached_last_iter&&radius<0) {
-                radius*=2;
-            } else {
-                fprintf(stderr, "Less than minimium improvement\n");
-                stalled++;
-                allow_drift=true;
-            }
-        } else {
-            score_before = new_score;
-            stalled = 0;
-        }
         clean_tree(t);
         iteration++;
-        if (max_optimize_hours&&(std::chrono::steady_clock::now()-start_time>max_optimize_duration)) {
-            interrupted=true;
-            break;
-        }
-        if(iteration>=max_round) {
-            fprintf(stderr, "Reached %d interations\n", iteration);
-            interrupted=true;
-            break;
-        }
-    }
+
     fprintf(stderr, "Final Parsimony score %zu\n",t.get_parsimony_score());
     fclose(movalbe_src_log);
     save_final_tree(t, origin_states, output_path);

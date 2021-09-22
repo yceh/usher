@@ -3,13 +3,16 @@
 #include "priority_conflict_resolver.hpp"
 #include <algorithm>
 #include <atomic>
+#include <bits/types/FILE.h>
 #include <chrono>
 #include <cstddef>
 #include <cstdio>
 #include <mutex>
+#include <string>
 #include <tbb/blocked_range.h>
 #include <tbb/concurrent_unordered_map.h>
 #include <tbb/concurrent_vector.h>
+#include <tbb/enumerable_thread_specific.h>
 #include <tbb/parallel_for.h>
 #include <tbb/partitioner.h>
 #include <tbb/task.h>
@@ -96,6 +99,30 @@ void log_move_detail(const std::vector<Profitable_Moves_ptr_t> & moves, FILE* ou
                 ,iteration,move->score_change,radius-move->radius_left,move->src->dfs_end_index-move->src->dfs_index);
     }
 }
+
+struct file_printer{
+    static int id;
+    static std::mutex mutex;
+    FILE* fd;
+    file_printer(){
+        std::lock_guard<std::mutex> lk(mutex);
+        errno=0;
+        fd=fopen(std::to_string(id).c_str(), "w");
+        perror("");
+        id++;
+    }
+    void operator()(const std::string& node_name){
+        fputs(node_name.c_str(), fd);
+        fputc('\n', fd);
+    }
+    ~file_printer(){
+        fclose(fd);
+    }
+};
+int file_printer::id(0);
+std::mutex file_printer::mutex;
+
+    thread_local file_printer node_printer;
 std::pair<size_t, size_t> optimize_tree(std::vector<MAT::Node *> &bfs_ordered_nodes,
                                         tbb::concurrent_vector<MAT::Node *> &nodes_to_search,
                                         MAT::Tree &t,int radius,FILE* log,bool allow_drift,int iteration
@@ -126,7 +153,7 @@ std::pair<size_t, size_t> optimize_tree(std::vector<MAT::Node *> &bfs_ordered_no
                                          ,&t
 #endif
                       ](tbb::blocked_range<size_t> r) {
-
+        file_printer& this_printer=node_printer;
         stack_allocator<Mutation_Count_Change> this_thread_FIFO_allocator(FIFO_allocator_state);
         size_t nodes_searched_this_batch=0;
         for (size_t i = r.begin(); i < r.end(); i++) {
@@ -136,6 +163,7 @@ std::pair<size_t, size_t> optimize_tree(std::vector<MAT::Node *> &bfs_ordered_no
             if(((!deferred_nodes.size())||(std::chrono::steady_clock::now()-last_save_time)<save_period)&&deferred_nodes.size()<max_queued_moves) {
                 output_t out;
                 auto node=nodes_to_search[i];
+                this_printer(node->identifier);
                 auto this_node_searched=find_profitable_moves(node, out, radius,this_thread_FIFO_allocator,allow_drift?-1:0
 #ifdef DEBUG_PARSIMONY_SCORE_CHANGE_CORRECT
                                         ,&t
