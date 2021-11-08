@@ -101,6 +101,7 @@ struct line_align{
         return true;
     }
 };
+typedef tbb::flow::multifunction_node<char*,tbb::flow::tuple<Parsed_VCF_Line*>> line_parser_t;
 struct gzip_input_source{
     unsigned char* map_start;
     //char* read_curr;
@@ -172,34 +173,53 @@ struct gzip_input_source{
         return *(get_c_ptr++);    
     }
 
-    void operator()(tbb::concurrent_bounded_queue<std::pair<char*,uint8_t*>>& out) const{
-        char* line_out=new char[alloc_size];
-        //if (getc_buf) {
+    void operator()(line_parser_t& out,size_t line_size) const{
+        auto line_out=new uint8_t[alloc_size];
             auto load_size=getc_buf+BUFSIZ-get_c_ptr;
             memcpy(line_out, get_c_ptr, load_size);
-            decompress_to_buffer((unsigned char*)line_out+load_size, read_size-load_size);
             delete[](getc_buf);
+            uint8_t* decompress_start=line_out+load_size;
+            size_t decompress_size=read_size-load_size;
             getc_buf=nullptr;
             fprintf(stderr,"getc_buff_deallocated\n");
-            out.emplace(line_out,state->next_out);
-        //}
-        line_out=new char[alloc_size];
-        while (decompress_to_buffer((unsigned char*)line_out, read_size)) {
-            out.emplace(line_out,state->next_out);
-            line_out=new char[alloc_size];
+        uint8_t* next_line_out=nullptr;
+        while (decompress_to_buffer(decompress_start, decompress_size)) {
+            auto getline_chunk_size=std::min(0x10000ul,line_size);
+            decompress_size=read_size;
+            next_line_out=new uint8_t[alloc_size];
+            if (*(state->next_out-1)!='\n') {
+                auto scan_start=state->next_out;
+                while (true) {
+                    decompress_to_buffer(state->next_out, getline_chunk_size);
+                    *state->next_out=0;
+                    auto eol=strchr((char*)scan_start, '\n');
+                    if (eol!=0) {
+                        auto copy_size=(char*)state->next_out-eol-1;
+                        memcpy(next_line_out, eol+1, copy_size);
+                        decompress_start=next_line_out+copy_size;
+                        *(eol+1)=0;
+                        break;
+                    }else {
+                        //assert(eol==(char*)state->next_out);
+                        scan_start=state->next_out;
+                    }
+                }
+            }else {
+                decompress_start=next_line_out;
+                *(state->next_out)=0;
+            }
+            out.try_put((char*)line_out);
+            line_out=next_line_out;
+
         }
-        out.emplace(nullptr,nullptr);
-        out.emplace(nullptr,nullptr);
-        delete [] line_out;
     }
 };
 //Parse a block of lines, assuming there is a complete line in the line_in buffer
-typedef tbb::flow::multifunction_node<line_start_later,tbb::flow::tuple<Parsed_VCF_Line*>> line_parser_t;
 struct line_parser {
     const std::vector<long>& header;
-    void operator()(line_start_later line_in_struct, line_parser_t::output_ports_type& out)const {
-        char*  line_in=line_in_struct.start;
-        char*  to_free=line_in_struct.alloc_start;
+    void operator()(char* line_in_struct, line_parser_t::output_ports_type& out)const {
+        char*  line_in=line_in_struct;
+        char*  to_free=line_in_struct;
         Parsed_VCF_Line* parsed_line;
         while (*line_in!=0) {
             std::vector<nuc_one_hot> allele_translated;
@@ -346,7 +366,7 @@ void print_progress(std::atomic<bool>* done,std::mutex* done_mutex) {
     }
 }
 template<typename infile_t>
-static line_start_later try_get_first_line(infile_t& f,size_t& size ) {
+static char* try_get_first_line(infile_t& f,size_t& size ) {
     std::string temp;
     char c;
     while ((c=f.getc())!='\n') {
@@ -356,9 +376,9 @@ static line_start_later try_get_first_line(infile_t& f,size_t& size ) {
     size=temp.size()+1;
     char* buf=new char[size];
     strcpy(buf, temp.data());
-    return line_start_later{buf,buf};
+    return buf;
 }
-#define CHUNK_SIZ 200ul
+#define CHUNK_SIZ 20ul
 #define ONE_GB 0x4ffffffful
 template<typename infile_t>
 static void process(MAT::Tree& tree,infile_t& fd){
@@ -398,10 +418,10 @@ static void process(MAT::Tree& tree,infile_t& fd){
     size_t first_approx_size=std::min(CHUNK_SIZ,ONE_GB/single_line_size)-2;
     read_size=first_approx_size*single_line_size;
     alloc_size=(first_approx_size+2)*single_line_size;
-    tbb::concurrent_bounded_queue<std::pair<char*,uint8_t*>> queue;
-    tbb::flow::source_node<line_start_later> line(input_graph,line_align(queue));
-    tbb::flow::make_edge(line,parser);
-    fd(queue);
+    //tbb::concurrent_bounded_queue<std::pair<char*,uint8_t*>> queue;
+    //tbb::flow::source_node<line_start_later> line(input_graph,line_align(queue));
+    //tbb::flow::make_edge(line,parser);
+    fd(parser,single_line_size);
     input_graph.wait_for_all();
     deallocate_FS_cache(output);
     fill_muts(output, bfs_ordered_nodes);
@@ -419,13 +439,13 @@ void VCF_input(const char * name,MAT::Tree& tree) {
     std::thread progress_meter(print_progress,&done,&done_mutex);
     //open file set increase buffer size
     std::string vcf_filename(name);
-    if (vcf_filename.find(".gz\0") != std::string::npos) {
+    //if (vcf_filename.find(".gz\0") != std::string::npos) {
         gzip_input_source fd(name);
         process(tree, fd);
-    }else {
-        raw_input_source fd(name);
-        process(tree, fd);
-    }
+    //}else {
+        //raw_input_source fd(name);
+        //process(tree, fd);
+    //}
     done=true;
     progress_bar_cv.notify_all();
     progress_meter.join();
