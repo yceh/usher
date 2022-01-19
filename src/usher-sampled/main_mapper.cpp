@@ -43,11 +43,16 @@ struct Empty_Hook {
     void target_N_skiped(const MAT::Mutation &mut) {}
     void both(const To_Place_Sample_Mutation &mut, const MAT::Mutation &mut2) {}
 };
-static void insert_split(const To_Place_Sample_Mutation &sample_mut,
+static int insert_split(const To_Place_Sample_Mutation &sample_mut,
                          const MAT::Mutation &target_mut,
                          std::vector<To_Place_Sample_Mutation> &sample_mutations,
                          MAT::Mutations_Collection &splitted_mutations,
                          MAT::Mutations_Collection &shared_mutations) {
+    if (target_mut.get_mut_one_hot()&target_mut.get_par_one_hot()) {
+        splitted_mutations.push_back(target_mut);
+        sample_mutations.push_back(sample_mut);
+        return !(sample_mut.par_nuc&sample_mut.mut_nuc);
+    }
     auto par_nuc = target_mut.get_par_one_hot();
     auto sample_nuc = sample_mut.mut_nuc;
     auto target_nuc = target_mut.get_mut_one_hot();
@@ -70,6 +75,7 @@ static void insert_split(const To_Place_Sample_Mutation &sample_mut,
         sample_mutations.back().par_nuc=coincided_mut;
         sample_mutations.back().mut_nuc= sample_nuc;
     }
+    return 0;
 }
 static void n_skiped_sibling(
         MAT::Mutations_Collection &splitted_mutations,
@@ -164,12 +170,14 @@ struct Down_Sibling_Hook {
         sample_check_mutation(sample_mutations, splitted_mutations, shared_mutations, sample_mut.position);
         if (sample_mut.mut_nuc != target_mut.get_mut_one_hot()) {
             if (sample_mut.mut_nuc & target_mut.get_mut_one_hot()) {
-                insert_split(sample_mut, target_mut, sample_mutations,
+                parsimony_score+=insert_split(sample_mut, target_mut, sample_mutations,
                              splitted_mutations, shared_mutations);
             } else {
                 sample_mutations.push_back(sample_mut);
                 splitted_mutations.push_back(target_mut);
-                parsimony_score++;
+                if (!(sample_mut.mut_nuc&sample_mut.par_nuc)) {
+                    parsimony_score++;
+                }
             }
         } else {
             if (__builtin_popcount(target_mut.get_mut_one_hot())!=1) {
@@ -181,6 +189,9 @@ struct Down_Sibling_Hook {
                 }
                 sample_mutations.push_back(sample_mut);
                 sample_mutations.back().par_nuc=common;
+                if (!(common&sample_mut.mut_nuc)) {
+                    parsimony_score++;
+                }
                 splitted_mutations.push_back(target_mut);
                 splitted_mutations.back().set_par_one_hot(common);
             }else {
@@ -290,7 +301,7 @@ struct Upward_Sibling_Hook {
                 }
             }
             else if ((sample_mut.mut_nuc & target_mut.get_mut_one_hot())) {
-                insert_split(sample_mut, target_mut, sample_mutations,
+                parsimony_score+=insert_split(sample_mut, target_mut, sample_mutations,
                              splitted_mutations, shared_mutations);
             } else {
                 parsimony_score++;
@@ -410,6 +421,33 @@ struct Main_Tree_Searcher : public tbb::task {
     {
     }
     void register_target(Main_Tree_Target &target, int this_score) {
+        #ifndef NDEBUG
+        int initial_par_score=0;
+        for (const auto & mut : target.target_node->mutations) {
+            if (!(mut.get_par_one_hot()&mut.get_mut_one_hot())) {
+                initial_par_score++;
+            }
+        }
+        for (const auto& mut : target.splited_mutations) {
+            if (!(mut.get_par_one_hot()&mut.get_mut_one_hot())) {
+                initial_par_score--;
+            }
+        }
+        initial_par_score-=target.shared_mutations.size();
+        if (initial_par_score!=0) {
+            raise(SIGTRAP);
+        }
+        int sample_par_score=0;
+        for (const auto& mut : target.sample_mutations) {
+            if (mut.mut_nuc!=0xf&&!(mut.par_nuc&mut.mut_nuc)) {
+                sample_par_score++;
+            }
+        }
+        if (sample_par_score!=this_score) {
+            fprintf(stderr, "sample %d, this %d \n",sample_par_score,this_score);
+            raise(SIGTRAP);
+        }
+        #endif
         if (output.best_par_score >= this_score) {
             std::lock_guard<std::mutex> lk(output.mutex);
             if (output.best_par_score > this_score) {

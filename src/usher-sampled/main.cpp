@@ -122,10 +122,6 @@ int main(int argc, char **argv) {
     for (auto node : dfs) {
         node->branch_length=node->mutations.size();
     }
-    #ifndef NDEBUG
-    check_samples(tree.root, ori_state, &tree);
-    fprintf(stderr, "\n------\n%zu samples\n",ori_state.size());
-    #endif
     Sampled_Tree_Node *sampled_tree_root=sample_tree(tree, sampling_radius,false);
     
     #ifndef NDEBUG
@@ -175,7 +171,7 @@ int main(int argc, char **argv) {
     for (auto&& to_place : samples_to_place) {
         fprintf(stderr, "placing sample %s, placed %d\n",to_place.sample_name.c_str(),placed_sample_count);
         placed_sample_count++;
-        if (placed_sample_count%100==0) {
+        if (placed_sample_count%1000==0) {
             remove_sampled_tree(sampled_tree_root);
             sampled_tree_root=sample_tree(tree, sampling_radius,true);
         }
