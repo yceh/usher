@@ -7,8 +7,9 @@ namespace MAT = Mutation_Annotated_Tree;
 
 void get_trios(MAT::Tree T, std::string filepath);
 
-void get_parents (Mutation_Annotated_Tree::Tree* T, std::unordered_set<std::string> &need_parents, std::unordered_set<std::string> &all_nodes);
+void get_parents(Mutation_Annotated_Tree::Tree *T,
+                 std::unordered_set<std::string> &need_parents,
+                 std::unordered_set<std::string> &all_nodes);
 
 #endif
-
 

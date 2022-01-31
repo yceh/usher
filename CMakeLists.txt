@@ -199,7 +199,7 @@ else()
 
     add_executable(matUtils
         src/mutation_annotated_tree.cpp
-        src/usher_mapper.cpp
+        src/usher_mapper.cpp 
         ${MATUTIL_SRCS}
         ${PROTO_SRCS}
         ${PROTO_HDRS}
@@ -207,9 +207,25 @@ else()
         ${TAXO_HDRS}
         )
 
+    add_executable(ripplesUtils
+				src/mutation_annotated_tree.cpp
+				src/usher_mapper.cpp 
+			  # HERE
+				src/ripplesUtils/extract_formats.h
+				src/ripplesUtils/extract_formats.cpp
+				src/ripplesUtils/ripplesUtils.cpp
+				src/ripplesUtils/parse_data.cpp
+				src/ripplesUtils/text_parser.h
+				src/ripplesUtils/text_parser.cpp
+				${PROTO_SRCS}
+				${PROTO_HDRS}
+        )
+
     add_executable(ripples
         src/mutation_annotated_tree.cpp
         src/usher_mapper.cpp
+				#src/ripples/ripplesUtils/format.hpp
+				#src/ripples/ripplesUtils/format.cpp
         ${RIPPLES_SRCS}
         ${PROTO_SRCS}
         ${PROTO_HDRS}
@@ -352,6 +368,7 @@ target_include_directories(usher PUBLIC "${PROJECT_BINARY_DIR}")
 
 TARGET_COMPILE_OPTIONS(matUtils PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
 TARGET_LINK_LIBRARIES(matUtils PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
+TARGET_LINK_LIBRARIES(ripplesUtils PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
 
 TARGET_COMPILE_OPTIONS(ripples PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
 TARGET_LINK_LIBRARIES(ripples PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
