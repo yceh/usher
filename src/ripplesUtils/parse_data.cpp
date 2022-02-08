@@ -38,9 +38,6 @@ void get_trios(MAT::Tree T, std::string filepath) {
         if (std::isdigit(acceptor.at(0)) == 1) {
             acceptor = "node_" + acceptor;
         }
-        std::cout << "RECOMB: " << recomb << std::endl;
-        std::cout << "DONOR: " << donor << std::endl;
-        std::cout << "ACCEPTOR: " << acceptor << std::endl;
 
         // Get the recomb, donor, acceptor trios from each line
         all_nodes.insert(recomb);
