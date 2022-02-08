@@ -1,6 +1,8 @@
 #include "extract_formats.h"
+#include "parse_data.hpp"
 #include <iostream>
 #include <string>
+#include <string_view>
 
 int main(int argc, char **argv) {
 
@@ -30,8 +32,7 @@ int main(int argc, char **argv) {
     }
     fprintf(stdout, "Completed loading MAT, getting trios now.\n");
 
-    // Call get_trios -> Ouputs two files:  allRelevantNodeNames.txt and
-    // nodeToParent.txt
+    // Ouputs two files:  allRelevantNodeNames.txt and nodeToParent.txt
     get_trios(T, combined_pvals_filename);
 
     return 0;

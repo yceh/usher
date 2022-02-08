@@ -11,13 +11,12 @@ class text_parser {
 
     std::string_view line() const { return std::string_view(curr, eol - curr); }
 
-    size_t num_rows() const { return rows; }
-
     size_t get_size() const { return size; }
 
     void next_line();
 
     bool done() const { return curr == end; }
+
 
     std::string_view get_value(int column) const {
         auto offset = curr;
@@ -34,9 +33,9 @@ class text_parser {
         return std::string_view(offset, eol - offset);
     }
 
+
   private:
     size_t size;
-    size_t rows;
     const char *data, *curr, *end, *eol;
 };
 

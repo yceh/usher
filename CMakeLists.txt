@@ -25,6 +25,12 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "-DNDEBUG -O3")
 set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG -O3")
 set(CMAKE_INCLUDE_CURRENT_DIR ON) 
 
+
+#message(${FMT_DIR})
+add_subdirectory(${FMT_DIR})
+
+
+
 if(DEFINED Protobuf_PATH) 
     find_package(Protobuf REQUIRED HINTS ${Protobuf_PATH}) 
 else()
@@ -214,9 +220,12 @@ else()
 				src/ripplesUtils/extract_formats.h
 				src/ripplesUtils/extract_formats.cpp
 				src/ripplesUtils/ripplesUtils.cpp
+				#src/ripplesUtils/parse_data.hpp
 				src/ripplesUtils/parse_data.cpp
 				src/ripplesUtils/text_parser.h
 				src/ripplesUtils/text_parser.cpp
+				#src/ripplesUtils/check_mutant.cpp
+				#src/ripplesUtils/check_mutant.hpp
 				${PROTO_SRCS}
 				${PROTO_HDRS}
         )
@@ -224,8 +233,6 @@ else()
     add_executable(ripples
         src/mutation_annotated_tree.cpp
         src/usher_mapper.cpp
-				#src/ripples/ripplesUtils/format.hpp
-				#src/ripples/ripplesUtils/format.cpp
         ${RIPPLES_SRCS}
         ${PROTO_SRCS}
         ${PROTO_HDRS}
@@ -368,7 +375,8 @@ target_include_directories(usher PUBLIC "${PROJECT_BINARY_DIR}")
 
 TARGET_COMPILE_OPTIONS(matUtils PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
 TARGET_LINK_LIBRARIES(matUtils PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
-TARGET_LINK_LIBRARIES(ripplesUtils PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
+
+TARGET_LINK_LIBRARIES(ripplesUtils PRIVATE fmt::fmt stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
 
 TARGET_COMPILE_OPTIONS(ripples PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
 TARGET_LINK_LIBRARIES(ripples PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
