@@ -59,6 +59,7 @@ AUX_SOURCE_DIRECTORY(src/matOptimize/apply_move patch_tree)
 file(GLOB MATUTIL_SRCS "src/matUtils/*.cpp" "src/matUtils/*.hpp")
 file(GLOB RIPPLES_SRCS "src/ripples/*.cpp" "src/ripples/*.hpp")
 file(GLOB RIPPLES_FAST_SRCS "src/ripples/ripples_fast/*.cpp" "src/ripples/ripples_fast/*.hpp")
+file(GLOB RIPPLES_UTILS_SRCS "src/ripplesUtils/*.cpp" "src/ripplesUtils/*.hpp")
 
 set_source_files_properties(src/mutation_annotated_tree.cpp PROPERTIES COMPILE_FLAGS -O3)
 #set_source_files_properties(src/usher_mapper.cpp PROPERTIES COMPILE_FLAGS -O3)
@@ -217,15 +218,7 @@ else()
 				src/mutation_annotated_tree.cpp
 				src/usher_mapper.cpp 
 			  # HERE
-				src/ripplesUtils/extract_formats.h
-				src/ripplesUtils/extract_formats.cpp
-				src/ripplesUtils/ripplesUtils.cpp
-				#src/ripplesUtils/parse_data.hpp
-				src/ripplesUtils/parse_data.cpp
-				src/ripplesUtils/text_parser.h
-				src/ripplesUtils/text_parser.cpp
-				#src/ripplesUtils/check_mutant.cpp
-				#src/ripplesUtils/check_mutant.hpp
+				${RIPPLES_UTILS_SRCS}
 				${PROTO_SRCS}
 				${PROTO_HDRS}
         )

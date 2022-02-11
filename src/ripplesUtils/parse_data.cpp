@@ -1,5 +1,5 @@
-#include "extract_formats.h"
-#include "text_parser.h"
+#include "extract_formats.hpp"
+#include "text_parser.hpp"
 #include <algorithm>
 #include <cstdio>
 #include <fstream>
