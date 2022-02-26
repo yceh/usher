@@ -18,6 +18,7 @@ cd isa-l-2.30.0
 make -j$(nproc)
 sudo -E make install
 cd ..
+
 #download and install TBB
 wget https://github.com/oneapi-src/oneTBB/archive/2019_U9.tar.gz 
 tar -xvzf 2019_U9.tar.gz
@@ -30,7 +31,6 @@ tar -xvf $FMT_VERSION.tar.gz
 cmake -GNinja -DTBB_DIR=${PWD}/oneTBB-2019_U9  -DCMAKE_PREFIX_PATH=${PWD}/oneTBB-2019_U9/cmake  -DFMT_DIR=${PWD}/fmt-$FMT_VERSION ..
 #make -j$(nproc) VERBOSE=1
 ninja
-
 
 # install faToVcf
 rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/linux.x86_64/faToVcf .

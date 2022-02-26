@@ -1,4 +1,3 @@
-
 cmake_minimum_required (VERSION 3.8) 
 cmake_policy(SET CMP0069 NEW)
 project(usher)
@@ -239,6 +238,17 @@ else()
         ${PROTO_HDRS}
         )
 
+    add_executable(amplicon
+				src/mutation_annotated_tree.cpp
+				src/usher_mapper.cpp 
+				src/amplicon/amplicon.cpp
+				src/amplicon/amplicon.hpp
+				src/amplicon/main.cpp
+			  # HERE
+				${PROTO_SRCS}
+				${PROTO_HDRS}
+        )
+
     add_executable(compareVCF
         src/mutation_annotated_tree.cpp
         src/compareVCF.cpp
@@ -370,6 +380,7 @@ TARGET_COMPILE_OPTIONS(matUtils PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
 TARGET_LINK_LIBRARIES(matUtils PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
 
 TARGET_LINK_LIBRARIES(ripplesUtils PRIVATE fmt::fmt stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
+TARGET_LINK_LIBRARIES(amplicon PRIVATE fmt::fmt stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
 
 TARGET_COMPILE_OPTIONS(ripples PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
 TARGET_LINK_LIBRARIES(ripples PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
