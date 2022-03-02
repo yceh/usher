@@ -71,16 +71,16 @@ int main(int argc, char **argv) {
     MAT::read_vcf(&T, input_vcf_filename, missing_samples, false);
 
     // Printing out missing sample information for debugging:
-    /*
-// Print out names of new amplicon samples to place
-for (auto &sample : missing_samples) {
-    fmt::print("{}\n", sample.name);
+/*		
+    // Print out names of new amplicon samples to place
+    for (auto &sample : missing_samples) {
+        fmt::print("{}\n", sample.name);
 
-    for (auto &mutation : sample.mutations) {
-        fmt::print("{}\n", mutation.position);
+        for (auto &mutation : sample.mutations) {
+            fmt::print("{}\n", mutation.position);
+        }
     }
-}
-    */
+*/
     fmt::print("Found {} missing amplicon samples.\n", missing_samples.size());
 
     boost::filesystem::path path(outdir);
