@@ -70,14 +70,36 @@ int main(int argc, char **argv) {
     // Read VCF and extract new amplicon sequences to place
     MAT::read_vcf(&T, input_vcf_filename, missing_samples, false);
 
-    // Print out names of new amplicon samples to place
-    for (auto sample : missing_samples) {
-        fmt::print("{}\n", sample.name);
+    // Printing out missing sample information for debugging:
+    /*
+// Print out names of new amplicon samples to place
+for (auto &sample : missing_samples) {
+    fmt::print("{}\n", sample.name);
 
-        for (auto mutation : sample.mutations) {
-            fmt::print("{}\n", mutation.position);
-        }
+    for (auto &mutation : sample.mutations) {
+        fmt::print("{}\n", mutation.position);
     }
-    fmt::print("Finished printing new amplicon samples from input VCF\n");
+}
+    */
+    fmt::print("Found {} missing amplicon samples.\n", missing_samples.size());
+
+    boost::filesystem::path path(outdir);
+    if (!boost::filesystem::exists(path)) {
+        fmt::print(stderr, "Creating output directory.\n", timer.Stop());
+        boost::filesystem::create_directory(path);
+    }
+    path = boost::filesystem::canonical(outdir);
+    outdir = path.generic_string();
+
+    // TODO: take as input
+    std::string sam_file_path = "one_aln.sam";
+
+    // Contains start position of each aligned read to reference line by line
+    // from SAM file
+    std::vector<int> start_coordinates;
+
+    // Get starting coordinates of each amplicon aligned to reference from SAM
+    // file
+    get_starting_coordinates(sam_file_path, start_coordinates);
 }
 
