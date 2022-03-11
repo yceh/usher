@@ -1,8 +1,10 @@
 #include "amplicon.hpp"
 #include "fmt/core.h"
 #include "fmt/format.h"
+#include "tbb/concurrent_unordered_set.h"
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include <random>
 #include <time.h>
 
 namespace po = boost::program_options;
@@ -29,7 +31,9 @@ int main(int argc, char **argv) {
         */
         ("vcf,v", po::value<std::string>()->required(),
          "Input VCF file (in uncompressed or gzip-compressed .gz format) "
-         "[REQUIRED]");
+         "[REQUIRED]")("sam,s", po::value<std::string>()->required(),
+                       "Input SAM alignment file) "
+                       "[REQUIRED]");
 
     po::options_description all_options;
     all_options.add(desc);
@@ -55,9 +59,11 @@ int main(int argc, char **argv) {
     MAT::Tree T;
     std::string input_mat_filename = vm["input-mat"].as<std::string>();
     std::string input_vcf_filename = vm["vcf"].as<std::string>();
+    std::string input_sam_filename = vm["sam"].as<std::string>();
 
     timer.Start();
     fmt::print(stderr, "Loading input MAT file = {}\n", input_mat_filename);
+    fmt::print(stderr, "Loading input SAM file = {}\n", input_sam_filename);
 
     // Load input MAT to place amplicons onto and uncondense tree
     T = MAT::load_mutation_annotated_tree(input_mat_filename);
@@ -70,17 +76,20 @@ int main(int argc, char **argv) {
     // Read VCF and extract new amplicon sequences to place
     MAT::read_vcf(&T, input_vcf_filename, missing_samples, false);
 
-    // Printing out missing sample information for debugging:
-/*		
-    // Print out names of new amplicon samples to place
-    for (auto &sample : missing_samples) {
-        fmt::print("{}\n", sample.name);
-
-        for (auto &mutation : sample.mutations) {
-            fmt::print("{}\n", mutation.position);
-        }
+    // Check that there are actually missing samples from VCF to add to tree
+    if (missing_samples.size() <= 0) {
+        fmt::print("No new samples found in input VCF to add to input MAT. "
+                   "Exiting program.\n");
+        return 0;
     }
-*/
+
+    // Printing out missing sample information for debugging:
+    // Print out names of new amplicon samples to place
+    /*
+    for (auto &sample : missing_samples) {
+      fmt::print("{}\n", sample.name);
+    }
+    */
     fmt::print("Found {} missing amplicon samples.\n", missing_samples.size());
 
     boost::filesystem::path path(outdir);
@@ -91,15 +100,19 @@ int main(int argc, char **argv) {
     path = boost::filesystem::canonical(outdir);
     outdir = path.generic_string();
 
-    // TODO: take as input
-    std::string sam_file_path = "one_aln.sam";
+    static tbb::affinity_partitioner ap;
 
     // Contains start position of each aligned read to reference line by line
     // from SAM file
     std::vector<int> start_coordinates;
+    std::vector<int> end_coordinates;
 
     // Get starting coordinates of each amplicon aligned to reference from SAM
     // file
-    get_starting_coordinates(sam_file_path, start_coordinates);
+    get_starting_coordinates(input_sam_filename, start_coordinates);
+
+    tbb::concurrent_unordered_set<std::string> nodes_to_consider;
+
+    auto bfs = T.breadth_first_expansion();
 }
 
