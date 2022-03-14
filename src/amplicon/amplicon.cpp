@@ -1,34 +1,42 @@
+#include "amplicon.hpp"
 #include "fmt/core.h"
 #include "fmt/format.h"
-#include <memory>
-#include <random>
-#include <vector>
-//#include "tbb/concurrent_unordered_set.h"
-#include "amplicon.hpp"
 #include "src/ripplesUtils/text_parser.hpp"
+#include "tbb/concurrent_unordered_set.h"
+#include <memory>
+#include <numeric>
+#include <random>
+#include <tuple>
+#include <vector>
 
-void get_starting_coordinates(std::string sam_file_path,
-                              std::vector<int> &start_coordinates) {
+// Get starting and ending genomic coordinates of where the amplicon aligned to
+// reference
+void get_coordinates(
+    std::string fasta_file_path,
+    std::vector<std::tuple<int, int>> &samples_start_end_coordinates) {
 
-    // Read entire SAM file into memory
-    text_parser sam(sam_file_path);
+    //  Read entire fasta file into memory
+    text_parser fasta(fasta_file_path);
 
-    char at = '@';
-    while (1) {
-        // Get first character in current line, and check if '@'
-        std::string first_char = std::string{sam.get_value(0).at(0)};
-        if (sam.get_value(0)[0] != at) {
-            //  Once moved past metadata headers
-            break;
+    // Skip over reference sequence
+    fasta.next_line();
+
+    char at = '>';
+    for (; !fasta.done(); fasta.next_line()) {
+        if (fasta.get_value(0)[0] != at) {
+            continue;
         }
-        // If current line still metadata, move to the next line
-        sam.next_line();
-    }
+        // Get coordinates debugging
+        // fmt::print("Name of amplicon sample: {}\t", fasta.get_value(0));
+        // fmt::print("Size of amplicon: {}\t", fasta.get_value(1));
+        // fmt::print("Starting position: {}\t", fasta.get_value(2));
+        // fmt::print("Ending position: {}\n", fasta.get_value(3));
 
-    //  Current line now first line of actual alignment data
-    for (; !sam.done(); sam.next_line()) {
-        // Get the start position of the aligment read, which is column 4
-        start_coordinates.push_back(str_view_to_uint64(sam.get_value(3)));
+        int start = str_view_to_uint64(fasta.get_value(2));
+        int end = str_view_to_uint64(fasta.get_value(3));
+        std::tuple<int, int> tup = std::make_tuple(start, end);
+				// Add each start and end coordinate tuple for each amplicon
+        samples_start_end_coordinates.push_back(tup);
     }
 }
 
@@ -41,4 +49,5 @@ inline uint64_t str_view_to_uint64(std::string_view str) noexcept {
 
 void placement(MAT::Tree *T, std::string &vcf_filename,
                std::vector<Missing_Sample> &missing_samples,
+               std::vector<std::tuple<int, int>> samples_start_end_coordinates,
                bool create_new_mat) {}

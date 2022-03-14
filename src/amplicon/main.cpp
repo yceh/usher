@@ -6,6 +6,8 @@
 #include <boost/program_options.hpp>
 #include <random>
 #include <time.h>
+#include <tuple>
+#include <unordered_map>
 
 namespace po = boost::program_options;
 
@@ -31,8 +33,8 @@ int main(int argc, char **argv) {
         */
         ("vcf,v", po::value<std::string>()->required(),
          "Input VCF file (in uncompressed or gzip-compressed .gz format) "
-         "[REQUIRED]")("sam,s", po::value<std::string>()->required(),
-                       "Input SAM alignment file) "
+         "[REQUIRED]")("fasta,f", po::value<std::string>()->required(),
+                       "Input aligned fasta alignment file) "
                        "[REQUIRED]");
 
     po::options_description all_options;
@@ -59,16 +61,30 @@ int main(int argc, char **argv) {
     MAT::Tree T;
     std::string input_mat_filename = vm["input-mat"].as<std::string>();
     std::string input_vcf_filename = vm["vcf"].as<std::string>();
-    std::string input_sam_filename = vm["sam"].as<std::string>();
+    std::string input_fasta_filename = vm["fasta"].as<std::string>();
 
     timer.Start();
     fmt::print(stderr, "Loading input MAT file = {}\n", input_mat_filename);
-    fmt::print(stderr, "Loading input SAM file = {}\n", input_sam_filename);
+    fmt::print(stderr, "Loading input FASTA file = {}\n", input_fasta_filename);
 
     // Load input MAT to place amplicons onto and uncondense tree
     T = MAT::load_mutation_annotated_tree(input_mat_filename);
     T.uncondense_leaves();
     fmt::print(stderr, "Completed in {} msec \n", timer.Stop());
+
+    auto bfs = T.breadth_first_expansion();
+    tbb::concurrent_unordered_set<std::string> nodes_to_consider;
+		//fmt::print("{}\n", bfs.size());
+
+    std::unordered_map<MAT::Node *, size_t> tree_num_leaves;
+    for (int i = int(bfs.size()) - 1; i >= 0; i--) {
+        auto n = bfs[i];
+        size_t desc = 1;
+        for (auto child : n->children) {
+            desc += tree_num_leaves[child];
+        }
+        tree_num_leaves[n] = desc;
+    }
 
     // All input amplicon sequences to place, not found already on input tree
     std::vector<Missing_Sample> missing_samples;
@@ -76,21 +92,18 @@ int main(int argc, char **argv) {
     // Read VCF and extract new amplicon sequences to place
     MAT::read_vcf(&T, input_vcf_filename, missing_samples, false);
 
+    auto num_samples = missing_samples.size();
     // Check that there are actually missing samples from VCF to add to tree
-    if (missing_samples.size() <= 0) {
+    if (num_samples <= 0) {
         fmt::print("No new samples found in input VCF to add to input MAT. "
                    "Exiting program.\n");
         return 0;
     }
-
-    // Printing out missing sample information for debugging:
-    // Print out names of new amplicon samples to place
-    /*
+    // Amplicon samples to place
     for (auto &sample : missing_samples) {
-      fmt::print("{}\n", sample.name);
+        fmt::print("{}\n", sample.name);
     }
-    */
-    fmt::print("Found {} missing amplicon samples.\n", missing_samples.size());
+    fmt::print("Found {} missing amplicon samples.\n", num_samples);
 
     boost::filesystem::path path(outdir);
     if (!boost::filesystem::exists(path)) {
@@ -102,17 +115,18 @@ int main(int argc, char **argv) {
 
     static tbb::affinity_partitioner ap;
 
-    // Contains start position of each aligned read to reference line by line
-    // from SAM file
-    std::vector<int> start_coordinates;
-    std::vector<int> end_coordinates;
+    std::vector<std::tuple<int, int>> samples_start_end_coordinates;
+    samples_start_end_coordinates.reserve(num_samples);
 
-    // Get starting coordinates of each amplicon aligned to reference from SAM
-    // file
-    get_starting_coordinates(input_sam_filename, start_coordinates);
-
-    tbb::concurrent_unordered_set<std::string> nodes_to_consider;
-
-    auto bfs = T.breadth_first_expansion();
+    // Get start and ending coordinates of each amplicon aligned to reference
+    // from aligned multifasta file
+    get_coordinates(input_fasta_filename, samples_start_end_coordinates);
+		/*
+    for (auto &tup : sample_start_end_coordinates) {
+        fmt::print("START: {}\t", std::get<0>(tup));
+        fmt::print("END: {}\n", std::get<1>(tup));
+    }
+		*/
+    fmt::print("All amplicon sample alignment coordinates retrieved.\n");
 }
 
