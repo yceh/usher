@@ -1,0 +1,19 @@
+# GCP credentials
+BUCKET_ID: 
+PROJECT_ID: 
+KEY_FILE: 
+
+# GCP machine and Storage Bucket config
+INSTANCES: 4
+BOOT_DISK_SIZE: 30
+MACHINE_TYPE: e2-standard-16
+LOGGING: example.log
+
+# Ripples parameters config
+VERSION: ripples
+MAT: 
+RESULTS: results/
+
+
+
+

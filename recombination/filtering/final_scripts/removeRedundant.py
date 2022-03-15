@@ -18,6 +18,7 @@ import re
 
 def removeRedundantTrios():
     nodeToLeaves = {}
+    #TODO: Move into recombination/filtering/data dir
     with gzip.open('recombination/filtering/optimized-large-radius-pruneCatExcludeB30.usher.no-long-branches.leaves.txt.gz') as f:
         for line in f:
             splitLine = (line.decode('utf8').strip()).split('\t')
@@ -69,7 +70,8 @@ def removeRedundantTrios():
     for t in trioToLine:
         if not t in toRemove:
             myOutString += joiner(trioToLine[t])+'\n'
-    open('recombination/filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClustersNewTiebreak3seqP02RussPval005RemoveCircular.txt','w').write(myOutString)
+    #open('recombination/filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClustersNewTiebreak3seqP02RussPval005RemoveCircular.txt','w').write(myOutString)
+    open('recombination/filtering/results/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClustersNewTiebreak3seqP02RussPval005RemoveCircular.txt','w').write(myOutString)
 
 
 

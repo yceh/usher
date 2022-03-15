@@ -39,7 +39,7 @@ def removeDups():
             if not str(splitLine[-3])+'_'+str(splitLine[-2])+'_'+str(splitLine[-1]) in alreadyDone:
                 myOutString += str(splitLine[-3])+' '+str(splitLine[-2])+' '+str(splitLine[-1])+'\n'
             alreadyDone[str(splitLine[-3])+'_'+str(splitLine[-2])+'_'+str(splitLine[-1])] = True
-    open('recombination/filtering/3seq_build/mnk_no_dups.txt','w').write(myOutString)
+    open('recombination/filtering/data/mnk_no_dups.txt','w').write(myOutString)
 
 ##########################
 #### HELPER FUNCTIONS ####

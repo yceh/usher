@@ -19,7 +19,7 @@ import re
 def catOnlyBest():
     nodeToLines = {}
     nodeToMinStart = {}
-    with open('recombination/filtering/data/catRecombination.txt') as f:
+    with open('recombination/filtering/recombination.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
             if not splitLine[0].startswith('#'):
@@ -45,11 +45,11 @@ def catOnlyBest():
                 print(l)
                 l[-2] = nodeToMinStart[k]
             myOutString += joiner(l)+'\n'
-    open('recombination/filtering/data/catRecombinationReplacedMinStartingPars.txt','w').write(myOutString)
+    open('recombination/filtering/data/catRecombinationReplacedMinStartingPars.tsv','w').write(myOutString)
 
     nodeToKeepLines = {}
     nodeToBestScore = {}
-    with open('recombination/filtering/data/catRecombinationReplacedMinStartingPars.txt') as f:
+    with open('recombination/filtering/data/catRecombinationReplacedMinStartingPars.tsv') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
             if not splitLine[0].startswith('#'):
@@ -76,6 +76,7 @@ def catOnlyBest():
                     splitLine = line.split('\t')
                     if len(splitLine) > 1:
                         lineCounter += 1
+                        #splitLine[6] = splitLine[5][:-1] # correct for missed tab, retain only relevant fields
                         if not str(splitLine[0]) in recombToLines:
                             recombToLines[str(splitLine[0])] = []
                         recombToLines[str(splitLine[0])].append(splitLine)#splitLine[:4]+splitLine[6:])
@@ -144,6 +145,7 @@ def catOnlyBest():
                         for ind in keyToIndices[k]:
                             alreadyPrinted[ind] = True
                 for k in sorted(myKeepKeys, key=lambda k: (myKeepKeys[k][0], myKeepKeys[k][1], myKeepKeys[k][2], myKeepKeys[k][3])):
+                    #print(k, keyToCombinedLines[k])
                     myOutString += joiner(keyToCombinedLines[k])+'\n'
             print(myOutString.count('\n'), currentLen)
             if myOutString.count('\n') == currentLen:
@@ -155,7 +157,7 @@ def catOnlyBest():
         sys.stderr.write('Did not converge after 10 iterations of combining. Printing combined file.\n')
         open('recombination/filtering/data/combinedCatOnlyBest.txt','w').write(myOutString)
     nodeToDesc = {}
-    with open('recombination/filtering/data/catDescendants.txt') as f:
+    with open('recombination/filtering/descendants.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
             if not splitLine[0].startswith('#'):

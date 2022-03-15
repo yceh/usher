@@ -1,5 +1,3 @@
-# Moved functions from makeMNK.py over to this file
-
 #!/usr/bin/env python3
 # Name: Bryan Thornlow
 # Date: 2/1/2018
@@ -94,7 +92,10 @@ def combinePValueFiles():
 
 def addInfSites():
     finalReportTrios = {}
+    #TODO: Change this once you fix the raw sequence checks
     with open('recombination/filtering/data/final_report.txt') as f:
+    #TODO: JUST ADD THIS FOR NOW
+    #with open('recombination/filtering/data/final_report_HARDCODED.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
             finalReportTrios[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = True

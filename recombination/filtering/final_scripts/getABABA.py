@@ -46,12 +46,13 @@ def getABABA():
                     recombToParentSib[(int(splitLine[0]))][int(splitLine[6])] = True
 
     parentToGrand = {}
-    with open('recombination/filtering/data/nodeToParent.txt') as f:
+    #with open('recombination/filtering/data/nodeToParent.txt') as f:
+    with open('recombination/filtering/data/nodeToParent_no_underscore.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
+            #TODO: Look here:
             if not splitLine[0] == 'node':
                 parentToGrand[int(splitLine[0])] = int(splitLine[1])
-                #parentToGrand[int(splitLine[0][0:)] = int(splitLine[1])     #str[0:5] = str.substr(0,5) exclusive
 
     nodeToIndex = {}
     indexToNode = {}
@@ -117,6 +118,8 @@ def getABABA():
     myOutInfSeq = ''
     myOutInfSites = ''
     myOutSiteChanges = ''
+    # Num of rows in allRelevantNodesInfSites.txt
+    count = 0
     for recInd in recombToInformativeSeq:
         myRecombNode = indexToNode[recInd]
         for i in range(0,len(recombToParents[myRecombNode])):
@@ -124,6 +127,10 @@ def getABABA():
             myOutInfSites += str(myRecombNode)+'\t'+joiner(myParents)+'\t'+joiner(recombToEndRow[myRecombNode][i])+'\t'+joinerC(recombToInformativeSites[recInd][i])+'\n'
             myOutInfSeq += str(myRecombNode)+'\t'+joiner(myParents)+'\t'+joiner(recombToEndRow[myRecombNode][i])+'\t'+''.join(recombToInformativeSeq[recInd][i])+'\n'
             myOutSiteChanges += str(myRecombNode)+'\t'+joiner(myParents)+'\t'+joiner(recombToEndRow[myRecombNode][i])+'\t'+joinerC(recombToSiteChanges[recInd][i])+'\n'
+
+            count += 1
+
+    open('recombination/filtering/data/count.txt', 'w').write(str(count))
     open('recombination/filtering/data/allRelevantNodesInfSites.txt','w').write(myOutInfSites)
     open('recombination/filtering/data/allRelevantNodesInfSeq.txt','w').write(myOutInfSeq)
     open('recombination/filtering/data/allRelevantNodesSiteChanges.txt','w').write(myOutSiteChanges)

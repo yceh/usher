@@ -40,6 +40,7 @@ def applyPval():
 
 def doNewTiebreakers():
     nodeToLeaves = {}
+    #TODO: move this into recombination/filtering/data/
     with gzip.open('recombination/filtering/optimized-large-radius-pruneCatExcludeB30.usher.no-long-branches.leaves.txt.gz') as f:
         for line in f:
             splitLine = (line.decode('utf8').strip()).split('\t')

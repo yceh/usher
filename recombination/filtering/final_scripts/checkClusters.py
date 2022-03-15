@@ -50,7 +50,13 @@ def checkClusters():
                 elif mySeq[i] == 'B':
                     myB.append(mySites[i])
             #print(max(myA), min(myA), max(myB), min(myB))
-            if max(myA)-min(myA) > 20 and max(myB)-min(myB) > 20:
+            #TODO: Added condition to avoid key error, check correctness...
+            if max(myA)-min(myA) > 20 and max(myB)-min(myB) > 20 and myTrio in trioTo3P:
+                #if(trioTo3P[myTrio]
+                #print(type(trioTo3P)) 
+                #exit()
+                #print(trioTo3P[myTrio])
+                #exit()
                 myOutString += line.strip()+'\t'+joiner(trioTo3P[myTrio])+'\n'
                 if myStart == 0 or myEnd == 29903:
                     bp1[splitLine[0]] = True
