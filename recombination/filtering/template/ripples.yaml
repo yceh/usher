@@ -1,8 +1,3 @@
-# GCP credentials
-bucket_id: 
-project_id: 
-key_file: 
-
 # GCP machine and Storage Bucket config
 instances: 
 boot_disk_size: 30
@@ -12,6 +7,7 @@ logging:
 # Ripples parameters config
 version: 
 mat: 
+raw_sequences_path: 
 results: 
 
 

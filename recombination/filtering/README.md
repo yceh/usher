@@ -20,11 +20,11 @@ ___
 <br>
 
 2. **Add a service account**:
-	- TODO: Add instructions for setting up service account.  ADD link also.
+	- Click the Navagation Menu side bar on the GCP Console and go to `IAM & Admin` -> `Service Accounts`. Click `+Create Service Account`. 
 
 <br>
 
-3. **Download Keys JSON file**
+3. **Create and Download Keys JSON file**
 	- Once you have created a service account, you need to add keys to this serivce account.
 	Click the Navagation Menu side bar on the Web Console and go to `IAM & Admin` -> `Service Accounts` and click on the active service account you just created from the previous step.
 
@@ -48,7 +48,7 @@ ___
 ## Run RIPPLES Docker Container
 ___
 
-Pull and run public RIPPLES Docker image with the following command:
+Pull and run public RIPPLES Docker image with the following command. Replace the name of your `<keys>.json` file in the command below:
 ```
 docker run -it -e GOOGLE_APPLICATION_CREDENTIALS=/tmp/keys/<keys>.json -v ${KEY}:/tmp/keys/<keys>.json:ro mrkylesmith/ripples-pipeline:latest
 ```
@@ -61,15 +61,21 @@ This will drop you into an interactive (`-it` flag) Docker container shell where
 ## Setup Access to GCP Account and APIs
 ___
 
-- Add your bucket ID, project ID, and the downloaded access keys file to the `ripples.yaml` configuration file like this: 
-	- **Make sure the access credentials JSON file you downloaded is at the path below, or update the path in `ripples.yaml`**
+There are two blank template configuration files located in `template/` directory. Copy them into the current directory and follow instructions below to set your configurations.
+```
+cp template/setup.yaml .
+cp template/ripples.yaml .
+```
+
+### Grant GCP Access
+- Add your bucket ID, project ID, and the name of your downloaded `<keys>.json` file to the `setup.yaml` configuration file like this: 
 ```
 bucket_id: <your_bucket_id> 
 project_id: <your_project_id> 
 key_file: /tmp/keys/<your_key_file.json>
 ```
 
-3. Run the following setup program, which will activate your access credentials and enable all the necessary GCP APIs
+Run the following setup program, which will activate your access credentials and enable all the necessary GCP APIs
 ```
 python3 setup.py
 ```
@@ -78,12 +84,16 @@ python3 setup.py
 
 ## Configure RIPPLES job to execute and GCP Machine Type
 ___
+This RIPPLES workflow takes two main inputs described in more detail below:
+- MAT protobuf 
+- a path to compressed raw sequences (`.faxz`) file that you have placed in your Google Cloud Storage Bucket (`bucket_id`)
 
 Set configurations for the current RIPPLES job you want to run in `ripples.yaml` , shown below:
 ```
  # Ripples parameters config
  version: ripples
  mat: <mat.pb>
+ raw_sequences_path: <path_to_raw_sequences>
  results: <results/>
  
  # GCP machine and Storage Bucket config
@@ -98,6 +108,8 @@ Set configurations for the current RIPPLES job you want to run in `ripples.yaml`
 
 - `mat`: The Mutation Annotated Tree (MAT) protobuf that you want to search for recombination events. 
 
+- `raw_sequences_path`: A compressed (`.xz`) raw sequence file that contains all the raw sequences for all samples in the given MAT. This is required by RIPPLES post-filtration pipeline, which performs a sequencing quality check of putative recombinants that are detected.  
+
 - `results`: The output directory remote path on GCP Storage Bucket where RIPPLES will output results. 
 
 ### GCP Machine Type Options:
@@ -107,7 +119,7 @@ Set configurations for the current RIPPLES job you want to run in `ripples.yaml`
 
 - `machine_type`: Select the GCP machine type you would like to launch.  
 
-- `logging`: Name of the logging file for this particular RIPPLES job (**change for different jobs**) that will be output into your GCP Storage bucket under `bucket_id/logging/<logging>`.
+- `logging`: Name of the logging file for this particular RIPPLES job (**change for each run**) that will be output into your GCP Storage bucket under `bucket_id/logging/<logging>`.
 
 <br>
 
