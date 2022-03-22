@@ -8,7 +8,7 @@
 namespace MAT = Mutation_Annotated_Tree;
 
 void get_coordinates(
-    std::string sam_file_path,
+    std::string input_fasta_filename,
     std::vector<std::tuple<int, int>> &samples_start_end_coordinates);
 
 inline uint64_t str_view_to_uint64(std::string_view str) noexcept;
