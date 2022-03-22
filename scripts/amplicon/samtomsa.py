@@ -24,8 +24,6 @@ def decode(code):
     while (True):
         if(code==""):
             break
-        print(i)
-        print(code)
         if(code[i]=="M" or code[i]=="S" or code[i]=="D" or code[i]=="I"):
             value=code[:i]
             length.append(value)
@@ -82,6 +80,7 @@ for i in range(iterate):
                 alignedSeq+=queryIndex[queryIndex:int(length[j])+queryIndex]
                 queryIndex+=int(length[j])
         # print(column[0],queryIndex)
-        msafile.write(">"+column[0]+" "+str(queryIndex)+" "+str(refIndex)+" "+ str(refIndex+queryIndex-1)+"\n")
+        #msafile.write(">"+column[0]+" "+str(queryIndex)+" "+str(refIndex)+" "+ str(refIndex+queryIndex-1)+"\n")
+        msafile.write(">"+column[0]+'\t'+str(queryIndex)+'\t'+str(refIndex)+'\t'+ str(refIndex+queryIndex-1)+"\n")
         alignedSeq+="-"*(refLen-len(alignedSeq))
         msafile.write(alignedSeq+"\n")
