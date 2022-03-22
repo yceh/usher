@@ -16,9 +16,7 @@ for i in a:
     else:
         ref+=read[0].split("\n")[0]
 refLen=len(ref)
-# f=open("wuhCor1.txt","w")
-# f.write(ref)
-# f.close()
+
 def decode(code):
     i=0
     length=list()
@@ -26,6 +24,8 @@ def decode(code):
     while (True):
         if(code==""):
             break
+        print(i)
+        print(code)
         if(code[i]=="M" or code[i]=="S" or code[i]=="D" or code[i]=="I"):
             value=code[:i]
             length.append(value)
@@ -35,7 +35,7 @@ def decode(code):
         i+=1
     return (length, type)
 
-fileread=open("amplicon.sam","r")
+fileread=open("amplicons.sam","r")
 readLines=fileread.readlines()
 fileread.close()
 
