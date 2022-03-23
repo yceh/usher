@@ -207,6 +207,7 @@ int main(int argc, char **argv) {
             size_t num_mut = 0;
 
             // Is placement as sibling
+            // TODO: revisit this logic
             if (bfs[k]->is_leaf() || node_has_unique[k]) {
                 std::vector<MAT::Mutation> common_mut, l1_mut, l2_mut;
                 std::vector<MAT::Mutation> curr_l1_mut;
@@ -321,6 +322,7 @@ int main(int argc, char **argv) {
 
         best_node = bfs[best_j];
         // Is placement as sibling
+        // TODO: revisit this logic
         if (best_node->is_leaf() || node_has_unique[best_j]) {
             std::string nid = T.new_internal_node_id();
             T.create_node(nid, best_node->parent->identifier);
