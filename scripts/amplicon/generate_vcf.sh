@@ -9,12 +9,13 @@ aligned_amplicons="amplicons.fa"
 output_vcf="amplicons.vcf"
 
 # Align amplicon reads to reference to generate SAM file   (single-end alignment)
-./build/minimap2 -ax sr $covid_reference $amplicon_reads > $sam
+#minimap2 -O 4,6 -E 2,1 -ax sr $covid_reference $amplicon_reads > $sam
+minimap2 -ax sr $covid_reference $amplicon_reads > $sam
 
 # Convert sam -> msa
 python3 samtomsa.py
 
 # Call variants from aligned amplicon multifasta
-./build/faToVcf -maskSites=problematic_sites_sarsCov2.vcf $aligned_amplicons $output_vcf
+../../build/faToVcf -maskSites=problematic_sites_sarsCov2.vcf $aligned_amplicons $output_vcf
 
 echo "Finished generating amplicon vcf."

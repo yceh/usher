@@ -75,9 +75,10 @@ for i in range(iterate):
                 queryIndex+=int(length[j])
             elif(type[j]=="D"):
                 alignedSeq+="-"*int(length[j])
-                queryIndex+=int(length[j])
-            else:
-                alignedSeq+=queryIndex[queryIndex:int(length[j])+queryIndex]
+                #queryIndex+=int(length[j])
+            elif(type[j]=="I"):
+#                #print(length[j])
+#                alignedSeq+=queryIndex[queryIndex:int(length[j])+queryIndex]
                 queryIndex+=int(length[j])
         # print(column[0],queryIndex)
         #msafile.write(">"+column[0]+" "+str(queryIndex)+" "+str(refIndex)+" "+ str(refIndex+queryIndex-1)+"\n")

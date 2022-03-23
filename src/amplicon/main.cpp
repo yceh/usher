@@ -82,10 +82,10 @@ int main(int argc, char **argv) {
     printf("Found %lu missing amplicon samples.\n", num_samples);
 
     // Amplicon samples to place (debugging, can comment out)
-    printf("Printing missing amplicon samples place on input MAT\n");
-    for (auto &sample : missing_samples) {
-        printf("%s\n", sample.name.c_str());
-    }
+//    printf("Printing missing amplicon samples place on input MAT\n");
+//    for (auto &sample : missing_samples) {
+//        printf("%s\n", sample.name.c_str());
+//    }
 
     // Creating output directories
     boost::filesystem::path path(outdir);
@@ -194,52 +194,273 @@ int main(int argc, char **argv) {
             },
             ap);
 
-        // For each sample in missing samples keep the best parimony score (just
-        // set difference?) and the number of parsimony-optimal placements
-        best_parsimony_scores.emplace_back(best_set_difference);
-        num_best_placements.emplace_back(num_best);
-
-        fprintf(stderr, "Currently placing amplicon: %s\n",
-                missing_samples[s].name.c_str());
+        fprintf(stdout, "Currently placing amplicon: %s\n",
+                missing_samples[s].name.c_str()); 
 
         // Get starting and ending coordinates for masking amplicon sample
         int start = std::get<0>(samples_start_end_coordinates[s]);
         int end = std::get<1>(samples_start_end_coordinates[s]);
 
-        // Get number of mutations for the current amplicon sample to be placed
-        size_t num_mutations = missing_samples[s].mutations.size();
+        int min_parsimony = best_set_difference;
+        auto sample = missing_samples[s].name;
+        for (size_t k=0; k< total_nodes; k++) {
+            size_t num_mut = 0;
 
-        // Missing_Sample
-        auto sample = missing_samples[s];
+            // Is placement as sibling
+            if (bfs[k]->is_leaf() || node_has_unique[k]) {
+                std::vector<MAT::Mutation> common_mut, l1_mut, l2_mut;
+                std::vector<MAT::Mutation> curr_l1_mut;
 
-        // Masking and placement takes place inside this loop
-        for (size_t i = 0; i < num_mutations; i++) {
-            // TODO:
+                for (auto m1: bfs[k]->mutations) {
+                    MAT::Mutation m = m1.copy();
+                    curr_l1_mut.emplace_back(m);
+                }
+
+                // Compute l2_mut
+                for (auto m1: node_excess_mutations[k]) {
+                    if ((m1.position < start) || (m1.position > end)) {
+                        MAT::Mutation m = m1.copy();
+                        common_mut.emplace_back(m);
+                        continue;
+                    }
+                    bool found = false;
+                    for (auto m2: curr_l1_mut) {
+                        if (m1.is_masked()) {
+                            break;
+                        }
+                        if ((m1.position == m2.position) &&
+                                (m1.mut_nuc == m2.mut_nuc)) {
+                            found = true;
+                            MAT::Mutation m = m1.copy();
+                            common_mut.emplace_back(m);
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        MAT::Mutation m = m1.copy();
+                        l2_mut.emplace_back(m);
+                    }
+                }
+                // Compute l1_mut
+                for (auto m1: curr_l1_mut) {
+                    bool found = false;
+                    for (auto m2: common_mut) {
+                        if (m1.is_masked()) {
+                            break;
+                        }
+                        if (m1.position == m2.position) {
+                            if (m1.mut_nuc == m2.mut_nuc) {
+                                found = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!found) {
+                        MAT::Mutation m = m1.copy();
+                        l1_mut.emplace_back(m);
+                    }
+                }
+
+                num_mut = l2_mut.size();
+
+                if (num_mut < min_parsimony) {
+                    best_j = k;
+                    min_parsimony = num_mut;
+                    num_best = 1;
+                }
+                else if (num_mut == min_parsimony) {
+                    num_best++;
+                }
+            }
+            // Else placement as child
+            else {
+                std::vector<MAT::Mutation> node_mut;
+
+                std::vector<MAT::Mutation> curr_l1_mut;
+
+                for (auto m1: bfs[k]->mutations) {
+                    MAT::Mutation m = m1.copy();
+                    curr_l1_mut.emplace_back(m);
+                }
+
+                for (auto m1: node_excess_mutations[k]) {
+                    bool found = false;
+                    if ((m1.position < start) || (m1.position > end)) {
+                        continue;
+                    }
+                    for (auto m2: curr_l1_mut) {
+                        if (m1.is_masked()) {
+                            break;
+                        }
+                        if ((m1.position == m2.position) &&
+                                (m1.mut_nuc == m2.mut_nuc)) { 
+                            found = true;
+                            break;
+                        }
+                    }
+                    if (!found) {
+                        MAT::Mutation m = m1.copy();
+                        node_mut.emplace_back(m);
+                    }
+                }
+                num_mut = node_mut.size();
+
+                if (num_mut < min_parsimony) {
+                    best_j = k;
+                    min_parsimony = num_mut;
+                    num_best = 1;
+                }
+                else if (num_mut == min_parsimony) {
+                    num_best++;
+                }
+            }
         }
+        
+        printf("Best placement parsimony score: %i\n", min_parsimony);
+        printf("Number of equally parsimonious placements: %zu\n", num_best);
+
+        best_node = bfs[best_j];
+        // Is placement as sibling
+        if (best_node->is_leaf() || node_has_unique[best_j]) {
+            std::string nid = T.new_internal_node_id();
+            T.create_node(nid, best_node->parent->identifier);
+            T.create_node(sample, nid);
+            T.move_node(best_node->identifier, nid);
+            // common_mut stores mutations common to the
+            // best node branch and the sample, l1_mut
+            // stores mutations unique to best node branch
+            // and l2_mut stores mutations unique to the
+            // sample not in best node branch
+            std::vector<MAT::Mutation> common_mut, l1_mut, l2_mut;
+            std::vector<MAT::Mutation> curr_l1_mut;
+
+            // Compute current best node branch mutations
+            for (auto m1: best_node->mutations) {
+                MAT::Mutation m = m1.copy();
+                curr_l1_mut.emplace_back(m);
+            }
+            // Clear mutations on the best node branch which
+            // will be later replaced by l1_mut
+            best_node->clear_mutations();
+
+            // Compute l2_mut
+            for (auto m1: node_excess_mutations[best_j]) {
+                if ((m1.position < start) || (m1.position > end)) {
+                    MAT::Mutation m = m1.copy();
+                    common_mut.emplace_back(m);
+                    continue;
+                }
+                bool found = false;
+                for (auto m2: curr_l1_mut) {
+                    if (m1.is_masked()) {
+                        break;
+                    }
+                    if ((m1.position == m2.position) &&
+                                (m1.mut_nuc == m2.mut_nuc)) {
+                        found = true;
+                        MAT::Mutation m = m1.copy();
+                        common_mut.emplace_back(m);
+                        break;
+                    }
+                }
+                if (!found) {
+                    MAT::Mutation m = m1.copy();
+                    l2_mut.emplace_back(m);
+                }
+            }
+            // Compute l1_mut
+            for (auto m1: curr_l1_mut) {
+                bool found = false;
+                for (auto m2: common_mut) {
+                    if (m1.is_masked()) {
+                        break;
+                    }
+                    if (m1.position == m2.position) {
+                        if (m1.mut_nuc == m2.mut_nuc) {
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if (!found) {
+                    MAT::Mutation m = m1.copy();
+                    l1_mut.emplace_back(m);
+                }
+            }
+
+            // Add mutations to new node using common_mut
+            for (auto m: common_mut) {
+                T.get_node(nid)->add_mutation(m);
+            }
+            // Add mutations to best node using l1_mut
+            for (auto m: l1_mut) {
+                T.get_node(best_node->identifier)->add_mutation(m);
+            }
+            // Add new sample mutations using l2_mut
+            for (auto m: l2_mut) {
+                T.get_node(sample)->add_mutation(m);
+            }
+        }
+        // Else placement as child
+        else {
+            T.create_node(sample, best_node->identifier);
+            MAT::Node* node = T.get_node(sample);
+            std::vector<MAT::Mutation> node_mut;
+
+            std::vector<MAT::Mutation> curr_l1_mut;
+
+            for (auto m1: best_node->mutations) {
+                MAT::Mutation m = m1.copy();
+                curr_l1_mut.emplace_back(m);
+            }
+
+            for (auto m1: node_excess_mutations[best_j]) {
+                bool found = false;
+                if ((m1.position < start) || (m1.position > end)) {
+                    continue;
+                }
+                for (auto m2: curr_l1_mut) {
+                    if (m1.is_masked()) {
+                        break;
+                    }
+                    if ((m1.position == m2.position) &&
+                                (m1.mut_nuc == m2.mut_nuc)) { 
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found) {
+                    MAT::Mutation m = m1.copy();
+                    node_mut.emplace_back(m);
+                }
+            }
+            for (auto m: node_mut) {
+                node->add_mutation(m);
+            }
+        }
+
     }
     // TODO: Generate Newick output (from usher_common.cpp)
-    /*
-        bool retain_original_branch_len = false;
-            // Default, change later if necessary
-        // NOW we want to output the file tree to Newick file
-        auto final_tree_filename = outdir + "/final-tree.nh";
-        fprintf(stderr, "Writing final tree to file %s \n",
-                final_tree_filename.c_str());
-        auto parsimony_score = T.get_parsimony_score();
-        fprintf(stderr, "The parsimony score for this tree is: %zu \n",
-                parsimony_score);
+    bool retain_original_branch_len = false;
+    // Default, change later if necessary
+    // NOW we want to output the file tree to Newick file
+    auto final_tree_filename = outdir + "/final-tree.nh";
+    fprintf(stderr, "Writing final tree to file %s \n",
+            final_tree_filename.c_str());
+    auto parsimony_score = T.get_parsimony_score();
+    fprintf(stderr, "The parsimony score for this tree is: %zu \n",
+            parsimony_score);
 
-        std::ofstream final_tree_file(final_tree_filename.c_str(),
-                                      std::ofstream::out);
-        std::stringstream newick_ss;
-        write_newick_string(newick_ss, T, T.root, true, true,
-                            retain_original_branch_len);
-        final_tree_file << newick_ss.rdbuf();
-        final_tree_file.close();
+    std::ofstream final_tree_file(final_tree_filename.c_str(),
+            std::ofstream::out);
+    std::stringstream newick_ss;
+    write_newick_string(newick_ss, T, T.root, true, true,
+            retain_original_branch_len);
+    final_tree_file << newick_ss.rdbuf();
+    final_tree_file.close();
 
         // tree_parsimony_scores.emplace_back(parsimony_score);
 
-            */
     fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
 }
 
