@@ -8,6 +8,7 @@
 #include <time.h>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 namespace po = boost::program_options;
 
@@ -113,6 +114,7 @@ int main(int argc, char **argv) {
     }
     path = boost::filesystem::canonical(outdir);
     outdir = path.generic_string();
+    auto annotations_file=fopen((outdir+"/clade.txt").c_str(), "w");
 
     static tbb::affinity_partitioner ap;
 
@@ -137,6 +139,7 @@ int main(int argc, char **argv) {
     //  for each new amplicon placed on tree
     std::vector<int> best_parsimony_scores;
     std::vector<size_t> num_best_placements;
+    auto num_annotations=T.get_num_annotations();
 
     printf("Starting placement of each amplicon sample iteratively on tree.\n");
     // Iterate over all the missing amplicon samples
@@ -222,6 +225,7 @@ int main(int argc, char **argv) {
 
         int min_parsimony = best_set_difference;
         auto sample = missing_samples[s].name;
+        std::vector<size_t> best_placements;
         for (size_t k=0; k< total_nodes; k++) {
             size_t num_mut = 0;
 
@@ -285,10 +289,13 @@ int main(int argc, char **argv) {
 
                 if (num_mut < min_parsimony) {
                     best_j = k;
+                    best_placements.clear();
+                    best_placements.push_back(k);
                     min_parsimony = num_mut;
                     num_best = 1;
                 }
                 else if (num_mut == min_parsimony) {
+                    best_placements.push_back(k);
                     num_best++;
                 }
             }
@@ -328,9 +335,12 @@ int main(int argc, char **argv) {
                 if (num_mut < min_parsimony) {
                     best_j = k;
                     min_parsimony = num_mut;
+                    best_placements.clear();
+                    best_placements.push_back(k);
                     num_best = 1;
                 }
                 else if (num_mut == min_parsimony) {
+                    best_placements.push_back(k);
                     num_best++;
                 }
             }
@@ -340,6 +350,55 @@ int main(int argc, char **argv) {
         printf("Number of equally parsimonious placements: %zu\n", num_best);
 
         best_node = bfs[best_j];
+
+        std::vector<std::vector<std::string>> clade_assignments;
+        clade_assignments.resize(num_annotations);
+        std::vector<std::string> best_clade_assignment;
+        best_clade_assignment.resize(num_annotations);
+        for (size_t c = 0; c < num_annotations; c++) {
+            clade_assignments[c].resize(best_j_vec.size());
+            // TODO: can be parallelized
+            for (size_t k = 0; k < best_j_vec.size(); k++) {
+                bool include_self =
+                    !bfs[best_j_vec[k]]->is_leaf() && !node_has_unique[k];
+                auto clade_assignment =
+                    T.get_clade_assignment(bfs[best_j_vec[k]], c, include_self);
+                clade_assignments[c][k] = clade_assignment;
+                if (k == 0) {
+                    best_clade_assignment[c] = clade_assignment;
+                }
+            }
+            std::sort(clade_assignments[c].begin(), clade_assignments[c].end());
+        }
+        fprintf(annotations_file, "%s\t", sample.c_str());
+        for (size_t k = 0; k < num_annotations; k++) {
+            fprintf(annotations_file, "%s", best_clade_assignment[k].c_str());
+            // TODO
+            fprintf(annotations_file, "*|");
+            std::string curr_clade = "";
+            int curr_count = 0;
+            for (auto clade : clade_assignments[k]) {
+                if (clade == curr_clade) {
+                    curr_count++;
+                } else {
+                    if (curr_count > 0) {
+                        fprintf(annotations_file, "%s(%i/%zu),",
+                                curr_clade.c_str(), curr_count,
+                                clade_assignments[k].size());
+                    }
+                    curr_clade = clade;
+                    curr_count = 1;
+                }
+            }
+            if (curr_count > 0) {
+                fprintf(annotations_file, "%s(%i/%zu)", curr_clade.c_str(),
+                        curr_count, clade_assignments[k].size());
+            }
+            if (k + 1 < num_annotations) {
+                fprintf(annotations_file, "\t");
+            }
+        }
+        fprintf(annotations_file, "\n");
         // Is placement as sibling
         // TODO: revisit this logic
         if (best_node->is_leaf() || node_has_unique[best_j]) {
