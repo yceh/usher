@@ -1,4 +1,5 @@
 #include "amplicon.hpp"
+#include "src/mutation_annotated_tree.hpp"
 #include "tbb/concurrent_unordered_set.h"
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
@@ -9,6 +10,24 @@
 #include <unordered_map>
 
 namespace po = boost::program_options;
+
+static void print_mutation_in_range(const std::string& sample_name,const MAT::Node* sample_node, int start_range,int end_range){
+    std::unordered_map<int, MAT::Mutation> mutations;
+    while (sample_node) {
+        for (const auto& mut : sample_node->mutations) {
+            if (mut.position>=start_range&&mut.position<=end_range) {
+                mutations.emplace(mut.position,mut);
+            }
+        }
+        sample_node=sample_node->parent;
+    }
+    for (const auto& mut : mutations) {
+        if (mut.second.ref_nuc!=mut.second.mut_nuc) {
+            printf("DEBUG:\t%s\t%d\t%c\n",sample_name.c_str(),mut.first,MAT::get_nuc(mut.second.mut_nuc));    
+        }
+    }
+}
+
 
 int main(int argc, char **argv) {
     Timer timer;
@@ -440,7 +459,9 @@ int main(int argc, char **argv) {
                 node->add_mutation(m);
             }
         }
-
+        #ifndef NDEBUG
+        print_mutation_in_range(sample, T.get_node(sample), start, end);
+        #endif
     }
     // TODO: Generate Newick output (from usher_common.cpp)
     bool retain_original_branch_len = false;
