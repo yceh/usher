@@ -3,6 +3,7 @@
 #include "tbb/concurrent_unordered_set.h"
 #include <boost/filesystem.hpp>
 #include <boost/program_options.hpp>
+#include <cassert>
 #include <random>
 #include <stdio.h>
 #include <time.h>
@@ -225,6 +226,7 @@ int main(int argc, char **argv) {
 
         int min_parsimony = best_set_difference;
         auto sample = missing_samples[s].name;
+        num_best=0;
         std::vector<size_t> best_placements;
         for (size_t k=0; k< total_nodes; k++) {
             size_t num_mut = 0;
@@ -345,7 +347,7 @@ int main(int argc, char **argv) {
                 }
             }
         }
-        
+        assert(num_best==best_placements.size());
         printf("Best placement parsimony score: %i\n", min_parsimony);
         printf("Number of equally parsimonious placements: %zu\n", num_best);
 
@@ -356,13 +358,13 @@ int main(int argc, char **argv) {
         std::vector<std::string> best_clade_assignment;
         best_clade_assignment.resize(num_annotations);
         for (size_t c = 0; c < num_annotations; c++) {
-            clade_assignments[c].resize(best_j_vec.size());
+            clade_assignments[c].resize(best_placements.size());
             // TODO: can be parallelized
-            for (size_t k = 0; k < best_j_vec.size(); k++) {
+            for (size_t k = 0; k < best_placements.size(); k++) {
                 bool include_self =
-                    !bfs[best_j_vec[k]]->is_leaf() && !node_has_unique[k];
+                    !bfs[best_placements[k]]->is_leaf() && !node_has_unique[k];
                 auto clade_assignment =
-                    T.get_clade_assignment(bfs[best_j_vec[k]], c, include_self);
+                    T.get_clade_assignment(bfs[best_placements[k]], c, include_self);
                 clade_assignments[c][k] = clade_assignment;
                 if (k == 0) {
                     best_clade_assignment[c] = clade_assignment;
@@ -399,6 +401,7 @@ int main(int argc, char **argv) {
             }
         }
         fprintf(annotations_file, "\n");
+        fflush(annotations_file);
         // Is placement as sibling
         // TODO: revisit this logic
         if (best_node->is_leaf() || node_has_unique[best_j]) {
