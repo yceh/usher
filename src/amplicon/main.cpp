@@ -6,6 +6,7 @@
 #include <cassert>
 #include <random>
 #include <stdio.h>
+#include <string>
 #include <time.h>
 #include <tuple>
 #include <unordered_map>
@@ -355,8 +356,6 @@ int main(int argc, char **argv) {
 
         std::vector<std::vector<std::string>> clade_assignments;
         clade_assignments.resize(num_annotations);
-        std::vector<std::string> best_clade_assignment;
-        best_clade_assignment.resize(num_annotations);
         for (size_t c = 0; c < num_annotations; c++) {
             clade_assignments[c].resize(best_placements.size());
             // TODO: can be parallelized
@@ -366,15 +365,38 @@ int main(int argc, char **argv) {
                 auto clade_assignment =
                     T.get_clade_assignment(bfs[best_placements[k]], c, include_self);
                 clade_assignments[c][k] = clade_assignment;
-                if (k == 0) {
-                    best_clade_assignment[c] = clade_assignment;
-                }
             }
             std::sort(clade_assignments[c].begin(), clade_assignments[c].end());
         }
         fprintf(annotations_file, "%s\t", sample.c_str());
+        std::vector<std::string> most_common_clades(num_annotations);
+        std::vector<float> most_common_proportion(num_annotations);
         for (size_t k = 0; k < num_annotations; k++) {
-            fprintf(annotations_file, "%s", best_clade_assignment[k].c_str());
+            std::string curr_clade = "";
+            int curr_count = 0;
+            int most_common_count=0;
+            std::string most_common_clade="";
+            for (auto clade : clade_assignments[k]) {
+                if (clade == curr_clade) {
+                    curr_count++;
+                } else {
+                    if (curr_count > most_common_count) {
+                        most_common_count=curr_count;
+                        most_common_clade=curr_clade;
+                    }
+                    curr_clade = clade;
+                    curr_count = 1;
+                }
+            }
+            if (curr_count > most_common_count) {
+                most_common_count=curr_count;
+                most_common_clade=curr_clade;
+            }
+            most_common_clades[k]=most_common_clade;
+            most_common_proportion[k]=(float)most_common_count/(float)clade_assignments[k].size();
+        }
+        for (size_t k = 0; k < num_annotations; k++) {
+            fprintf(annotations_file, "%s(%0.2f%%)", most_common_clades[k].c_str(),most_common_proportion[k]*100);
             // TODO
             fprintf(annotations_file, "*|");
             std::string curr_clade = "";
@@ -384,17 +406,17 @@ int main(int argc, char **argv) {
                     curr_count++;
                 } else {
                     if (curr_count > 0) {
-                        fprintf(annotations_file, "%s(%i/%zu),",
+                        fprintf(annotations_file, "%s(%i/%zu,%0.2f%%),",
                                 curr_clade.c_str(), curr_count,
-                                clade_assignments[k].size());
+                                clade_assignments[k].size(),100*(float)curr_count/(float)clade_assignments[k].size());
                     }
                     curr_clade = clade;
                     curr_count = 1;
                 }
             }
             if (curr_count > 0) {
-                fprintf(annotations_file, "%s(%i/%zu)", curr_clade.c_str(),
-                        curr_count, clade_assignments[k].size());
+                fprintf(annotations_file, "%s(%i/%zu,%0.2f%%)", curr_clade.c_str(),
+                        curr_count, clade_assignments[k].size(),100*(float)curr_count/(float)clade_assignments[k].size());
             }
             if (k + 1 < num_annotations) {
                 fprintf(annotations_file, "\t");
