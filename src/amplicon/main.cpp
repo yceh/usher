@@ -14,23 +14,25 @@
 
 namespace po = boost::program_options;
 
-static void print_mutation_in_range(const std::string& sample_name,const MAT::Node* sample_node, int start_range,int end_range){
+static void print_mutation_in_range(const std::string &sample_name,
+                                    const MAT::Node *sample_node,
+                                    int start_range, int end_range) {
     std::unordered_map<int, MAT::Mutation> mutations;
     while (sample_node) {
-        for (const auto& mut : sample_node->mutations) {
-            if (mut.position>=start_range&&mut.position<=end_range) {
-                mutations.emplace(mut.position,mut);
+        for (const auto &mut : sample_node->mutations) {
+            if (mut.position >= start_range && mut.position <= end_range) {
+                mutations.emplace(mut.position, mut);
             }
         }
-        sample_node=sample_node->parent;
+        sample_node = sample_node->parent;
     }
-    for (const auto& mut : mutations) {
-        if (mut.second.ref_nuc!=mut.second.mut_nuc) {
-            printf("DEBUG:\t%s\t%d\t%c\n",sample_name.c_str(),mut.first,MAT::get_nuc(mut.second.mut_nuc));    
+    for (const auto &mut : mutations) {
+        if (mut.second.ref_nuc != mut.second.mut_nuc) {
+            printf("DEBUG:\t%s\t%d\t%c\n", sample_name.c_str(), mut.first,
+                   MAT::get_nuc(mut.second.mut_nuc));
         }
     }
 }
-
 
 int main(int argc, char **argv) {
     Timer timer;
@@ -104,10 +106,10 @@ int main(int argc, char **argv) {
     printf("Found %lu missing amplicon samples.\n", num_samples);
 
     // Amplicon samples to place (debugging, can comment out)
-//    printf("Printing missing amplicon samples place on input MAT\n");
-//    for (auto &sample : missing_samples) {
-//        printf("%s\n", sample.name.c_str());
-//    }
+    //    printf("Printing missing amplicon samples place on input MAT\n");
+    //    for (auto &sample : missing_samples) {
+    //        printf("%s\n", sample.name.c_str());
+    //    }
 
     // Creating output directories
     boost::filesystem::path path(outdir);
@@ -116,7 +118,7 @@ int main(int argc, char **argv) {
     }
     path = boost::filesystem::canonical(outdir);
     outdir = path.generic_string();
-    auto annotations_file=fopen((outdir+"/clade.txt").c_str(), "w");
+    auto annotations_file = fopen((outdir + "/clade.txt").c_str(), "w");
 
     static tbb::affinity_partitioner ap;
 
@@ -141,7 +143,7 @@ int main(int argc, char **argv) {
     //  for each new amplicon placed on tree
     std::vector<int> best_parsimony_scores;
     std::vector<size_t> num_best_placements;
-    auto num_annotations=T.get_num_annotations();
+    auto num_annotations = T.get_num_annotations();
 
     printf("Starting placement of each amplicon sample iteratively on tree.\n");
     // Iterate over all the missing amplicon samples
@@ -172,7 +174,6 @@ int main(int argc, char **argv) {
 
         size_t best_node_num_leaves = 0;
         int best_set_difference = 1e9;
-        // TODO: Come back
         std::vector<bool> node_has_unique(total_nodes);
         size_t best_j = 0;
         bool best_node_has_unique = false;
@@ -219,7 +220,7 @@ int main(int argc, char **argv) {
             ap);
 
         fprintf(stdout, "Currently placing amplicon: %s\n",
-                missing_samples[s].name.c_str()); 
+                missing_samples[s].name.c_str());
 
         // Get starting and ending coordinates for masking amplicon sample
         int start = std::get<0>(samples_start_end_coordinates[s]);
@@ -227,36 +228,35 @@ int main(int argc, char **argv) {
 
         int min_parsimony = best_set_difference;
         auto sample = missing_samples[s].name;
-        num_best=0;
+        num_best = 0;
         std::vector<size_t> best_placements;
-        for (size_t k=0; k< total_nodes; k++) {
+        for (size_t k = 0; k < total_nodes; k++) {
             size_t num_mut = 0;
 
             // Is placement as sibling
-            // TODO: revisit this logic
             if (bfs[k]->is_leaf() || node_has_unique[k]) {
                 std::vector<MAT::Mutation> common_mut, l1_mut, l2_mut;
                 std::vector<MAT::Mutation> curr_l1_mut;
 
-                for (auto m1: bfs[k]->mutations) {
+                for (auto m1 : bfs[k]->mutations) {
                     MAT::Mutation m = m1.copy();
                     curr_l1_mut.emplace_back(m);
                 }
 
                 // Compute l2_mut
-                for (auto m1: node_excess_mutations[k]) {
+                for (auto m1 : node_excess_mutations[k]) {
                     if ((m1.position < start) || (m1.position > end)) {
                         MAT::Mutation m = m1.copy();
                         common_mut.emplace_back(m);
                         continue;
                     }
                     bool found = false;
-                    for (auto m2: curr_l1_mut) {
+                    for (auto m2 : curr_l1_mut) {
                         if (m1.is_masked()) {
                             break;
                         }
                         if ((m1.position == m2.position) &&
-                                (m1.mut_nuc == m2.mut_nuc)) {
+                            (m1.mut_nuc == m2.mut_nuc)) {
                             found = true;
                             MAT::Mutation m = m1.copy();
                             common_mut.emplace_back(m);
@@ -269,9 +269,9 @@ int main(int argc, char **argv) {
                     }
                 }
                 // Compute l1_mut
-                for (auto m1: curr_l1_mut) {
+                for (auto m1 : curr_l1_mut) {
                     bool found = false;
-                    for (auto m2: common_mut) {
+                    for (auto m2 : common_mut) {
                         if (m1.is_masked()) {
                             break;
                         }
@@ -296,8 +296,7 @@ int main(int argc, char **argv) {
                     best_placements.push_back(k);
                     min_parsimony = num_mut;
                     num_best = 1;
-                }
-                else if (num_mut == min_parsimony) {
+                } else if (num_mut == min_parsimony) {
                     best_placements.push_back(k);
                     num_best++;
                 }
@@ -308,22 +307,22 @@ int main(int argc, char **argv) {
 
                 std::vector<MAT::Mutation> curr_l1_mut;
 
-                for (auto m1: bfs[k]->mutations) {
+                for (auto m1 : bfs[k]->mutations) {
                     MAT::Mutation m = m1.copy();
                     curr_l1_mut.emplace_back(m);
                 }
 
-                for (auto m1: node_excess_mutations[k]) {
+                for (auto m1 : node_excess_mutations[k]) {
                     bool found = false;
                     if ((m1.position < start) || (m1.position > end)) {
                         continue;
                     }
-                    for (auto m2: curr_l1_mut) {
+                    for (auto m2 : curr_l1_mut) {
                         if (m1.is_masked()) {
                             break;
                         }
                         if ((m1.position == m2.position) &&
-                                (m1.mut_nuc == m2.mut_nuc)) { 
+                            (m1.mut_nuc == m2.mut_nuc)) {
                             found = true;
                             break;
                         }
@@ -341,14 +340,13 @@ int main(int argc, char **argv) {
                     best_placements.clear();
                     best_placements.push_back(k);
                     num_best = 1;
-                }
-                else if (num_mut == min_parsimony) {
+                } else if (num_mut == min_parsimony) {
                     best_placements.push_back(k);
                     num_best++;
                 }
             }
         }
-        assert(num_best==best_placements.size());
+        assert(num_best == best_placements.size());
         printf("Best placement parsimony score: %i\n", min_parsimony);
         printf("Number of equally parsimonious placements: %zu\n", num_best);
 
@@ -362,8 +360,8 @@ int main(int argc, char **argv) {
             for (size_t k = 0; k < best_placements.size(); k++) {
                 bool include_self =
                     !bfs[best_placements[k]]->is_leaf() && !node_has_unique[k];
-                auto clade_assignment =
-                    T.get_clade_assignment(bfs[best_placements[k]], c, include_self);
+                auto clade_assignment = T.get_clade_assignment(
+                    bfs[best_placements[k]], c, include_self);
                 clade_assignments[c][k] = clade_assignment;
             }
             std::sort(clade_assignments[c].begin(), clade_assignments[c].end());
@@ -374,30 +372,32 @@ int main(int argc, char **argv) {
         for (size_t k = 0; k < num_annotations; k++) {
             std::string curr_clade = "";
             int curr_count = 0;
-            int most_common_count=0;
-            std::string most_common_clade="";
+            int most_common_count = 0;
+            std::string most_common_clade = "";
             for (auto clade : clade_assignments[k]) {
                 if (clade == curr_clade) {
                     curr_count++;
                 } else {
                     if (curr_count > most_common_count) {
-                        most_common_count=curr_count;
-                        most_common_clade=curr_clade;
+                        most_common_count = curr_count;
+                        most_common_clade = curr_clade;
                     }
                     curr_clade = clade;
                     curr_count = 1;
                 }
             }
             if (curr_count > most_common_count) {
-                most_common_count=curr_count;
-                most_common_clade=curr_clade;
+                most_common_count = curr_count;
+                most_common_clade = curr_clade;
             }
-            most_common_clades[k]=most_common_clade;
-            most_common_proportion[k]=(float)most_common_count/(float)clade_assignments[k].size();
+            most_common_clades[k] = most_common_clade;
+            most_common_proportion[k] =
+                (float)most_common_count / (float)clade_assignments[k].size();
         }
         for (size_t k = 0; k < num_annotations; k++) {
-            fprintf(annotations_file, "%s(%0.2f%%)", most_common_clades[k].c_str(),most_common_proportion[k]*100);
-            // TODO
+            fprintf(annotations_file, "%s(%0.2f%%)",
+                    most_common_clades[k].c_str(),
+                    most_common_proportion[k] * 100);
             fprintf(annotations_file, "*|");
             std::string curr_clade = "";
             int curr_count = 0;
@@ -408,15 +408,20 @@ int main(int argc, char **argv) {
                     if (curr_count > 0) {
                         fprintf(annotations_file, "%s(%i/%zu,%0.2f%%),",
                                 curr_clade.c_str(), curr_count,
-                                clade_assignments[k].size(),100*(float)curr_count/(float)clade_assignments[k].size());
+                                clade_assignments[k].size(),
+                                100 * (float)curr_count /
+                                    (float)clade_assignments[k].size());
                     }
                     curr_clade = clade;
                     curr_count = 1;
                 }
             }
             if (curr_count > 0) {
-                fprintf(annotations_file, "%s(%i/%zu,%0.2f%%)", curr_clade.c_str(),
-                        curr_count, clade_assignments[k].size(),100*(float)curr_count/(float)clade_assignments[k].size());
+                fprintf(annotations_file, "%s(%i/%zu,%0.2f%%)",
+                        curr_clade.c_str(), curr_count,
+                        clade_assignments[k].size(),
+                        100 * (float)curr_count /
+                            (float)clade_assignments[k].size());
             }
             if (k + 1 < num_annotations) {
                 fprintf(annotations_file, "\t");
@@ -425,7 +430,6 @@ int main(int argc, char **argv) {
         fprintf(annotations_file, "\n");
         fflush(annotations_file);
         // Is placement as sibling
-        // TODO: revisit this logic
         if (best_node->is_leaf() || node_has_unique[best_j]) {
             std::string nid = T.new_internal_node_id();
             T.create_node(nid, best_node->parent->identifier);
@@ -440,7 +444,7 @@ int main(int argc, char **argv) {
             std::vector<MAT::Mutation> curr_l1_mut;
 
             // Compute current best node branch mutations
-            for (auto m1: best_node->mutations) {
+            for (auto m1 : best_node->mutations) {
                 MAT::Mutation m = m1.copy();
                 curr_l1_mut.emplace_back(m);
             }
@@ -449,19 +453,19 @@ int main(int argc, char **argv) {
             best_node->clear_mutations();
 
             // Compute l2_mut
-            for (auto m1: node_excess_mutations[best_j]) {
+            for (auto m1 : node_excess_mutations[best_j]) {
                 if ((m1.position < start) || (m1.position > end)) {
                     MAT::Mutation m = m1.copy();
                     common_mut.emplace_back(m);
                     continue;
                 }
                 bool found = false;
-                for (auto m2: curr_l1_mut) {
+                for (auto m2 : curr_l1_mut) {
                     if (m1.is_masked()) {
                         break;
                     }
                     if ((m1.position == m2.position) &&
-                                (m1.mut_nuc == m2.mut_nuc)) {
+                        (m1.mut_nuc == m2.mut_nuc)) {
                         found = true;
                         MAT::Mutation m = m1.copy();
                         common_mut.emplace_back(m);
@@ -474,9 +478,9 @@ int main(int argc, char **argv) {
                 }
             }
             // Compute l1_mut
-            for (auto m1: curr_l1_mut) {
+            for (auto m1 : curr_l1_mut) {
                 bool found = false;
-                for (auto m2: common_mut) {
+                for (auto m2 : common_mut) {
                     if (m1.is_masked()) {
                         break;
                     }
@@ -494,42 +498,42 @@ int main(int argc, char **argv) {
             }
 
             // Add mutations to new node using common_mut
-            for (auto m: common_mut) {
+            for (auto m : common_mut) {
                 T.get_node(nid)->add_mutation(m);
             }
             // Add mutations to best node using l1_mut
-            for (auto m: l1_mut) {
+            for (auto m : l1_mut) {
                 T.get_node(best_node->identifier)->add_mutation(m);
             }
             // Add new sample mutations using l2_mut
-            for (auto m: l2_mut) {
+            for (auto m : l2_mut) {
                 T.get_node(sample)->add_mutation(m);
             }
         }
         // Else placement as child
         else {
             T.create_node(sample, best_node->identifier);
-            MAT::Node* node = T.get_node(sample);
+            MAT::Node *node = T.get_node(sample);
             std::vector<MAT::Mutation> node_mut;
 
             std::vector<MAT::Mutation> curr_l1_mut;
 
-            for (auto m1: best_node->mutations) {
+            for (auto m1 : best_node->mutations) {
                 MAT::Mutation m = m1.copy();
                 curr_l1_mut.emplace_back(m);
             }
 
-            for (auto m1: node_excess_mutations[best_j]) {
+            for (auto m1 : node_excess_mutations[best_j]) {
                 bool found = false;
                 if ((m1.position < start) || (m1.position > end)) {
                     continue;
                 }
-                for (auto m2: curr_l1_mut) {
+                for (auto m2 : curr_l1_mut) {
                     if (m1.is_masked()) {
                         break;
                     }
                     if ((m1.position == m2.position) &&
-                                (m1.mut_nuc == m2.mut_nuc)) { 
+                        (m1.mut_nuc == m2.mut_nuc)) {
                         found = true;
                         break;
                     }
@@ -539,15 +543,15 @@ int main(int argc, char **argv) {
                     node_mut.emplace_back(m);
                 }
             }
-            for (auto m: node_mut) {
+            for (auto m : node_mut) {
                 node->add_mutation(m);
             }
         }
-        #ifndef NDEBUG
+#ifndef NDEBUG
         print_mutation_in_range(sample, T.get_node(sample), start, end);
-        #endif
+#endif
     }
-    // TODO: Generate Newick output (from usher_common.cpp)
+
     bool retain_original_branch_len = false;
     // Default, change later if necessary
     // NOW we want to output the file tree to Newick file
@@ -555,19 +559,20 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Writing final tree to file %s \n",
             final_tree_filename.c_str());
     auto parsimony_score = T.get_parsimony_score();
-    fprintf(stderr, "The parsimony score for this tree is: %zu \n",
-            parsimony_score);
+    /* Print parsimony score for tree
+       fprintf(stderr, "The parsimony score for this tree is: %zu \n",
+       parsimony_score);
+    */
 
     std::ofstream final_tree_file(final_tree_filename.c_str(),
-            std::ofstream::out);
+                                  std::ofstream::out);
     std::stringstream newick_ss;
     write_newick_string(newick_ss, T, T.root, true, true,
-            retain_original_branch_len);
+                        retain_original_branch_len);
     final_tree_file << newick_ss.rdbuf();
     final_tree_file.close();
 
-        // tree_parsimony_scores.emplace_back(parsimony_score);
-
+    // tree_parsimony_scores.emplace_back(parsimony_score);
     fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
 }
 
