@@ -12,7 +12,7 @@ def options():
     print()
     print("optional arguments:")
     print("-h, --help            show this help message and exit")
-    print("-a ALIGN_WITH, --align_with ALIGN_WITH")
+    print("-a, --align_with")
     print("               Specify aligner to use. default = minimap2")
     print("-r             Specify -r flag to collapse duplicate amplicon reads with same starting position.")
     print()
@@ -41,7 +41,7 @@ args = parser.parse_args()
 
 amplicon_reads = args.reads
 aligner = args.align_with
-collapse_duplicates = args.r
+collapse_duplicates = args.remove
 
 print("FASTQ reads file given: ", amplicon_reads)
 print("Using {} aligner".format(aligner))
