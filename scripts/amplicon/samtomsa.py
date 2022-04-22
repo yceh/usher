@@ -33,11 +33,11 @@ def decode(code):
         i+=1
     return (length, type)
 
-fileread=open("amplicons.sam","r")
+fileread=open("data/amplicons.sam","r")
 readLines=fileread.readlines()
 fileread.close()
 
-msafile=open("amplicons.fa","w")
+msafile=open("data/amplicons.fa","w")
 msafile.write(">"+refName+"\n"+ref+"\n")
 iterate=len(readLines)
 for i in range(iterate):
@@ -61,7 +61,7 @@ for i in range(iterate):
         queryIndex=0
         initialInst=refIndex
         
-        print(length, type)
+        #print(length, type)
         alignedSeq+="-"*(initialInst-1)
         
         for j in range(len(type)):
