@@ -42,9 +42,9 @@ def get_partitions(long_branches, instances):
 def convert(n):
     return str(datetime.timedelta(seconds = n))
 
-def parse_command(mat, start, end, out):
+def parse_command(mat, start, end, out, log):
     command = "python3 process.py {} {} {} {} {} {} {} {} {}".format(version,
-            mat, start, end, out, bucket_id, results, reference, raw_sequences)
+            mat, start, end, out, bucket_id, results, reference, raw_sequences, log)
     return command
 
 # Takes in .gz newick and metadata 
@@ -52,13 +52,13 @@ def parse_chron_command(newick, metadata, steps):
     comand = "chronumental --tree {} --dates {} --steps {}".format(newick, metadata, steps)
     return command
 
-def gcloud_run(command):
+def gcloud_run(command, log):
     cmd = ["gcloud", "beta", "lifesciences", "pipelines", "run",
         "--location", "us-central1",
         "--regions", "us-central1",
         "--machine-type", machine_type, 
         "--boot-disk-size", boot_disk_size,
-        "--logging", logging,
+        "--logging", log,
         "--docker-image", docker_image,
         "--command-line", command,
         #"--outputs", results,
@@ -88,14 +88,14 @@ project_id = config["project_id"]
 key_file = config["key_file"]
 
 # Activate credentials for GCP Console and gcloud util
-auth()
+#auth()
 
 # Set ripples job config options
 docker_image = "mrkylesmith/ripples_pipeline:latest"
 boot_disk_size = str(config["boot_disk_size"])
 instances = config["instances"] # Number of remote machines to parallelize ripples across 
 machine_type = config["machine_type"]
-logging = "gs://{}/logging/{}".format(bucket_id, config["logging"])
+logging = "gs://{}/{}".format(bucket_id, config["logging"])
 version = config["version"]
 mat = config["mat"]
 newick = config["newick"]
@@ -116,6 +116,10 @@ if not os.path.isfile("{}/{}".format(current,mat)):
   subprocess.run(["gsutil", "cp", "gs://{}/{}".format(bucket_id, mat), current])
 else:
     print("Input MAT found in local directory.")
+
+# Check logging file created on GCP bucket  #TODO: Check the logging file exists on GCP bucket, otherwise create it ...
+if not logging.endswith("/"):
+    logging += "/"
 
 if num_descendants == None:
   init = "ripplesInit -i {}".format(mat)
@@ -150,14 +154,18 @@ for partition in partitions:
     start = str(partition[0])
     end = str(partition[1])
     out = "{}_{}".format(start, end)
+    log = logging + out
 
     # The following command gets executed on remote machine: 
     # python3 process.py <version> <tree.pb> <start> <end> <bucket_id> <output_dir> <reference> <raw_sequences>
-    command = parse_command(mat, start, end, out)
+    command = parse_command(mat, start, end, out, log)
 
-    info = gcloud_run(command)
+    info = gcloud_run(command, log)
     processes.append({'partition': partition, 'operation_id': info['operation_id']})
     completed.append(False)
+
+# Start total runtime for all instances running in parallel 
+start = timeit.default_timer()
 
 while not all(completed):
    i = 0
@@ -173,6 +181,14 @@ while not all(completed):
    time.sleep(1)
 
 print("All instance jobs have finished.  Aggregating results from remote machines.")
+
+# All job have completed, log total runtime, copy to GCP logging directory
+stop = timeit.default_timer()
+runtime_log = open("aggregate_runtime", "w")
+runtime_log.write("Timing for recombination detection tree date:{}{}{}".format('\t', date, '\n'))
+runtime_log.write("Total runtime searching {} tree with {} long branches:{}{}  (Hours:Minutes:Seconds){}".format(date, long_branches, '\t', str(timedelta(seconds=stop - start)), '\n'))
+runtime_log.close()
+subprocess.run(["gsutil", "cp", runtime_log, "gs://{}/{}".format(bucket_id, logging)])
 
 current = str(os.getcwd())
 

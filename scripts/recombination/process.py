@@ -10,6 +10,8 @@ import datetime
 import os
 import os.path
 import errno
+import timeit
+from datetime import timedelta
 
 version = sys.argv[1]
 mat = sys.argv[2]
@@ -22,6 +24,8 @@ bucket_id = sys.argv[6]
 results = sys.argv[7]
 reference = sys.argv[8]
 raw_sequences = sys.argv[9]
+# Log to output runtime information for each partition
+log = sys.argv[10]  
 
 pipeline_dir = os.getcwd()
 
@@ -33,6 +37,9 @@ def parse_ripples_command(version, mat, start, end):
     # in recombination/filtering to start this pipeline
     command = [version, "-i", mat, "-n", "2", "-S", start, "-E", end, "-d", "filtering/data"]
     return command
+
+# Start total runtime for instance
+start = timeit.default_timer()
 
 # Check starting directory is correct
 if (os.path.exists("process.py") == False):
@@ -50,10 +57,32 @@ if not os.path.exists(reference):
 if not os.path.exists(raw_sequences):
   subprocess.run(["gsutil", "cp", "gs://{}/{}".format(bucket_id, raw_sequences), pipeline_dir])
 
+# start runtime for RIPPLES
+start_ripples = timeit.default_timer()
+
 # Run ripples on current GCP instance
 cmd = parse_ripples_command(version, mat, start_range, end_range)
 subprocess.run(cmd)
 
+# Stop timer for RIPPLES
+stop_ripples = timeit.default_timer()
+
+# Start runtime for filtration pipeline
+start_filtration = timeit.default_timer()
+
 filtration = ["./run_ripples_filtration.sh", mat, raw_sequences, reference, results, out]
 # Run putative recombinants through post-processing filtration pipeline
 subprocess.run(filtration)
+
+# Job finished, log runtime, copy to GCP logging directory
+stop_filtration = timeit.default_timer()
+stop = timeit.default_timer()
+
+runtime_log = open("runtime_{}".format(out), "w")
+runtime_log.write("Timing for recombination detection nodes:{}{}{}".format('\t', out, '\n'))
+runtime_log.write("Time for ripples job:{}{}  (Hours:Minutes:Seconds){}".format('\t', str(timedelta(seconds=stop_ripples - start_ripples)), '\n'))
+runtime_log.write("Time for filtration pipeline:{}{}  (Hours:Minutes:Seconds){}".format('\t', str(timedelta(seconds=stop_filtration - start_filtration)), '\n'))
+runtime_log.write("Total runtime for nodes {}:{}{}  (Hours:Minutes:Seconds){}".format(out, '\t', str(timedelta(seconds=stop - start)), '\n'))
+runtime_log.close()
+
+subprocess.run(["gsutil", "cp", runtime_log, "gs://{}/{}".format(bucket_id, log)])

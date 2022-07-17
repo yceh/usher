@@ -12,6 +12,8 @@ logging:
 # Ripples parameters config [REQURIED]
 version: 
 mat: 
+newick:
+metadata:
 date: 
 results: 
 reference:
