@@ -9,14 +9,17 @@ MAT::Tree filter_master(const MAT::Tree& T, std::vector<std::string> sample_name
     assert (sample_names.size() > 0);
     if (prune) {
         subtree = prune_leaves(T, sample_names);
-    } else if (sample_names.size() < 10000) {
+    } 
+		//EDIT: Revist this logic for large trees
+		//else if (sample_names.size() < 10000) {
         //for retaining only a subtree, get_subtree is the most effective method
         //for subtress up to about 10 thousand samples in size; after that, pruning
         //all other nodes becomes more efficient, because get_subtree scales with
         //the size of the input sample set, while prune takes a similar time for
         //any sample set size, while scaling on total tree size
-        subtree = get_sample_subtree(T, sample_names, keep_clade_annotations);
-    } else {
+    //    subtree = get_sample_subtree(T, sample_names, keep_clade_annotations);
+    //} 
+		else {
         subtree = get_sample_prune(T, sample_names, keep_clade_annotations);
     }
     return subtree;
