@@ -42,9 +42,9 @@ def get_partitions(long_branches, instances):
 def convert(n):
     return str(datetime.timedelta(seconds = n))
 
-def parse_command(mat, start, end, out, log):
-    command = "python3 process.py {} {} {} {} {} {} {} {} {}".format(version,
-            mat, start, end, out, bucket_id, results, reference, raw_sequences, log)
+def parse_command(mat, start, end, out, logging):
+    command = "python3 process.py {} {} {} {} {} {} {} {} {} {}".format(version,
+            mat, start, end, out, bucket_id, results, reference, raw_sequences, logging)
     return command
 
 # Takes in .gz newick and metadata 
@@ -88,7 +88,7 @@ project_id = config["project_id"]
 key_file = config["key_file"]
 
 # Activate credentials for GCP Console and gcloud util
-auth()
+#auth()
 
 # Set ripples job config options
 #docker_image = "mrkylesmith/ripples_pipeline:latest"
@@ -156,11 +156,11 @@ for partition in partitions:
     start = str(partition[0])
     end = str(partition[1])
     out = "{}_{}".format(start, end)
-    log = logging + out
+    log = logging + out + ".log"
 
     # The following command gets executed on remote machine: 
     # python3 process.py <version> <tree.pb> <start> <end> <bucket_id> <output_dir> <reference> <raw_sequences>
-    command = parse_command(mat, start, end, out, log)
+    command = parse_command(mat, start, end, out, logging)
 
     info = gcloud_run(command, log)
     processes.append({'partition': partition, 'operation_id': info['operation_id']})
@@ -186,11 +186,11 @@ print("All instance jobs have finished.  Aggregating results from remote machine
 
 # All job have completed, log total runtime, copy to GCP logging directory
 stop = timeit.default_timer()
-runtime_log = open("aggregate_runtime", "w")
+runtime_log = open("aggregate_runtime.log", "w")
 runtime_log.write("Timing for recombination detection tree date:{}{}{}".format('\t', date, '\n'))
 runtime_log.write("Total runtime searching {} tree with {} long branches:{}{}  (Hours:Minutes:Seconds){}".format(date, long_branches, '\t', str(timedelta(seconds=stop - start)), '\n'))
 runtime_log.close()
-subprocess.run(["gsutil", "cp", runtime_log, "gs://{}/{}".format(bucket_id, logging)])
+subprocess.run(["gsutil", "cp", "aggregate_runtime.log", "gs://{}/{}".format(bucket_id, logging)])
 
 current = str(os.getcwd())
 
@@ -219,10 +219,10 @@ unfiltered_recombinants = open(local_results + "/unfiltered_recombinants_{}.txt"
 for directory in os.listdir(temp):
     subdir = temp + directory 
     print("SUBDIR: ", subdir)
-    # Guarantee to be only 2 files in each subdirectory
+    # Guarantee to be only 3 files in each subdirectory
     files = os.listdir(subdir)
     for file in files:
-      # Skip over descendents.tsv files for aggregating recombination events
+      # Skip over recombination.tsv and descendents.tsv files for aggregating recombination events
       if "final_recombinants.txt" in file:
         f1 = open(subdir + "/" +  file, "r")
         for line in f1:
@@ -235,6 +235,7 @@ for directory in os.listdir(temp):
           # One detected recombinant per line, aggregate all lines in each file
           unfiltered_recombinants.write(line)
         f2.close()
+      #TODO: Aggregate all descendents
 recombinants.close()
 unfiltered_recombinants.close()
 

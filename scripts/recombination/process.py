@@ -25,7 +25,7 @@ results = sys.argv[7]
 reference = sys.argv[8]
 raw_sequences = sys.argv[9]
 # Log to output runtime information for each partition
-log = sys.argv[10]  
+logging = sys.argv[10]  
 
 pipeline_dir = os.getcwd()
 
@@ -78,11 +78,11 @@ subprocess.run(filtration)
 stop_filtration = timeit.default_timer()
 stop = timeit.default_timer()
 
-runtime_log = open("runtime_{}".format(out), "w")
+runtime_log = open("runtime_{}.log".format(out), "w")
 runtime_log.write("Timing for recombination detection nodes:{}{}{}".format('\t', out, '\n'))
 runtime_log.write("Time for ripples job:{}{}  (Hours:Minutes:Seconds){}".format('\t', str(timedelta(seconds=stop_ripples - start_ripples)), '\n'))
 runtime_log.write("Time for filtration pipeline:{}{}  (Hours:Minutes:Seconds){}".format('\t', str(timedelta(seconds=stop_filtration - start_filtration)), '\n'))
 runtime_log.write("Total runtime for nodes {}:{}{}  (Hours:Minutes:Seconds){}".format(out, '\t', str(timedelta(seconds=stop - start)), '\n'))
 runtime_log.close()
 
-subprocess.run(["gsutil", "cp", runtime_log, "gs://{}/{}".format(bucket_id, log)])
+subprocess.run(["gsutil", "cp", "runtime_{}.log".format(out), "gs://{}/{}".format(bucket_id, logging)])
