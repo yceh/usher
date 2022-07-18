@@ -88,10 +88,12 @@ project_id = config["project_id"]
 key_file = config["key_file"]
 
 # Activate credentials for GCP Console and gcloud util
-#auth()
+auth()
 
 # Set ripples job config options
-docker_image = "mrkylesmith/ripples_pipeline:latest"
+#docker_image = "mrkylesmith/ripples_pipeline:latest"
+#TODO: Using dev image at the moment
+docker_image = "mrkylesmith/ripples_pipeline_dev:latest"
 boot_disk_size = str(config["boot_disk_size"])
 instances = config["instances"] # Number of remote machines to parallelize ripples across 
 machine_type = config["machine_type"]
