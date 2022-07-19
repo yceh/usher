@@ -60,7 +60,7 @@ def gcloud_run(command, log):
         "--regions", "us-central1",
         "--machine-type", machine_type, 
         "--boot-disk-size", boot_disk_size,
-        "--logging", "gs://{}/{}".format(bucket_id, log)
+        "--logging", "gs://{}/{}".format(bucket_id, log),
         "--docker-image", docker_image,
         "--command-line", command,
         #"--outputs", results,
@@ -158,7 +158,7 @@ for partition in partitions:
 
     start_range = str(partition[0])
     end_range = str(partition[1])
-    out = "{}_{}".format(start, end)
+    out = "{}_{}".format(start_range, end_range)
     log = logging + out + ".log"
 
     # The following command gets executed on remote machine: 
@@ -219,6 +219,7 @@ recombinants = open(local_results + "/recombinants_{}.txt".format(date), "w")
 unfiltered_recombinants = open(local_results + "/unfiltered_recombinants_{}.txt".format(date), "w")
 
 # Aggregate the results from all remote machines and combine into one final file in 'results/' dir
+# TODO: gcloud client function
 for directory in os.listdir(temp):
     subdir = temp + directory 
     print("SUBDIR: ", subdir)
@@ -243,6 +244,6 @@ recombinants.close()
 unfiltered_recombinants.close()
 
 # Remove temp directory 
-subprocess.run(["rm", "-r", temp])
+#subprocess.run(["rm", "-r", temp])
 
 print("Final recombination event results written to {}/recombinants_{}.txt".format(local_results,date))

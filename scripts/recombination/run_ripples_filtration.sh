@@ -8,6 +8,17 @@ reference="$3"
 results="$4"
 out="$5"
 
+# Create output results directories
+mkdir -p results
+mkdir -p results/$out
+cp filtering/data/recombination.tsv results/$out
+cp filtering/data/descendants.tsv results/$out
+# Copy ripples unfiltered recombinants to GCP bucket
+gsutil cp -r results/$out $results/
+
+#TODO: Testing
+exit
+
 # Outputs from ripples (recombination.tsv and descendants.tsv) placed in "filtering/data"
 
 python3 filtering/combineAndGetPVals.py
@@ -45,15 +56,9 @@ awk '$21 <= .20 {print}' filtering/data/combinedCatOnlyBestWithPValsFinalReportW
 
 python3 filtering/doNewTieBreakers.py 
 
-# Copy filtered recombinants to GCP bucket
-mkdir -p results
-mkdir -p results/$out
 python3 filtering/removeRedundant.py   
-mv results/final_recombinants.txt results/$out/
-gsutil cp -r results/$out $results/
+# Copy detected and filtered recombination to GCP Storage
+gsutil cp results/final_recombinants.txt $results/$out
 
-# Copy ripples unfiltered recombinants to GCP bucket
-gsutil cp filtering/data/recombination.tsv $results/$out
-gsutil cp filtering/data/descendants.tsv $results/$out
 
 echo "Pipeline finished. List of recombinants detected in 'results/' directory."
