@@ -12,7 +12,6 @@ import json
 import time
 import timeit
 import datetime
-from datetime
 from datetime import timedelta
 import yaml
 
@@ -111,7 +110,8 @@ raw_sequences = config["raw_sequences"]
 num_descendants = config["num_descendants"]
 
 # Remote location in GCP Storge Bucket to copy filtered recombinants
-#NOTE: Make sure this folder is created in Storage bucket ahead of time.
+#TODO: Make sure this folder is created in Storage bucket ahead of time.
+# Use gcloud client libary
 results = "gs://{}/{}".format(bucket_id, config["results"])
 
 # Copy over protobuf from GCP storage bucket to local container

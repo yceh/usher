@@ -67,6 +67,9 @@ subprocess.run(cmd)
 # Stop timer for RIPPLES
 stop_ripples = timeit.default_timer()
 
+# TODO: Testing
+exit()
+
 # Start runtime for filtration pipeline
 start_filtration = timeit.default_timer()
 
