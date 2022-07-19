@@ -10,7 +10,10 @@ import pathlib
 import re
 import json
 import time
+import timeit
 import datetime
+from datetime
+from datetime import timedelta
 import yaml
 
 
@@ -88,7 +91,7 @@ project_id = config["project_id"]
 key_file = config["key_file"]
 
 # Activate credentials for GCP Console and gcloud util
-#auth()
+auth()
 
 # Set ripples job config options
 #docker_image = "mrkylesmith/ripples_pipeline:latest"
