@@ -51,7 +51,7 @@ def parse_command(mat, start, end, out, logging):
 
 # Takes in .gz newick and metadata 
 def parse_chron_command(newick, metadata, steps):
-    comand = "chronumental --tree {} --dates {} --steps {}".format(newick, metadata, steps)
+    command = "chronumental --tree {} --dates {} --steps {}".format(newick, metadata, steps)
     return command
 
 def gcloud_run(command, log):
@@ -60,7 +60,7 @@ def gcloud_run(command, log):
         "--regions", "us-central1",
         "--machine-type", machine_type, 
         "--boot-disk-size", boot_disk_size,
-        "--logging", log,
+        "--logging", "gs://{}/{}".format(bucket_id, log)
         "--docker-image", docker_image,
         "--command-line", command,
         #"--outputs", results,
@@ -99,7 +99,7 @@ docker_image = "mrkylesmith/ripples_pipeline_dev:latest"
 boot_disk_size = str(config["boot_disk_size"])
 instances = config["instances"] # Number of remote machines to parallelize ripples across 
 machine_type = config["machine_type"]
-logging = "gs://{}/{}".format(bucket_id, config["logging"])
+logging = config["logging"]
 version = config["version"]
 mat = config["mat"]
 newick = config["newick"]
@@ -156,21 +156,21 @@ processes = []
 completed = []
 for partition in partitions:
 
-    start = str(partition[0])
-    end = str(partition[1])
+    start_range = str(partition[0])
+    end_range = str(partition[1])
     out = "{}_{}".format(start, end)
     log = logging + out + ".log"
 
     # The following command gets executed on remote machine: 
     # python3 process.py <version> <tree.pb> <start> <end> <bucket_id> <output_dir> <reference> <raw_sequences>
-    command = parse_command(mat, start, end, out, logging)
+    command = parse_command(mat, start_range, end_range, out, logging)
 
     info = gcloud_run(command, log)
     processes.append({'partition': partition, 'operation_id': info['operation_id']})
     completed.append(False)
 
 # Start total runtime for all instances running in parallel 
-start = timeit.default_timer()
+start_time = timeit.default_timer()
 
 while not all(completed):
    i = 0
@@ -188,10 +188,10 @@ while not all(completed):
 print("All instance jobs have finished.  Aggregating results from remote machines.")
 
 # All job have completed, log total runtime, copy to GCP logging directory
-stop = timeit.default_timer()
+stop_time = timeit.default_timer()
 runtime_log = open("aggregate_runtime.log", "w")
 runtime_log.write("Timing for recombination detection tree date:{}{}{}".format('\t', date, '\n'))
-runtime_log.write("Total runtime searching {} tree with {} long branches:{}{}  (Hours:Minutes:Seconds){}".format(date, long_branches, '\t', str(timedelta(seconds=stop - start)), '\n'))
+runtime_log.write("Total runtime searching {} tree with {} long branches:{}{}  (Hours:Minutes:Seconds){}".format(date, long_branches, '\t', str(timedelta(seconds=stop_time - start_time)), '\n'))
 runtime_log.close()
 subprocess.run(["gsutil", "cp", "aggregate_runtime.log", "gs://{}/{}".format(bucket_id, logging)])
 

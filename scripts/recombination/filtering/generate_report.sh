@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash
 #
 # Get the raw sequences for all the descendents
 

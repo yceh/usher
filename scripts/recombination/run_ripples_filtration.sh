@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash
 #
 # Run script to run filtration and QC pipeline on putative recombinants detected by RIPPLES
 
