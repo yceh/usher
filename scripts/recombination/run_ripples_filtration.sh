@@ -16,6 +16,8 @@ cp filtering/data/descendants.tsv results/$out
 # Copy ripples unfiltered recombinants to GCP bucket
 gsutil cp -r results/$out $results/
 
+exit
+
 # Outputs from ripples (recombination.tsv and descendants.tsv) placed in "filtering/data"
 
 python3 filtering/combineAndGetPVals.py
