@@ -35,7 +35,9 @@ def convert(n):
 def parse_ripples_command(version, mat, start, end):
     # Expecting ripples output (recombination.txt and descendents.txt)
     # in recombination/filtering to start this pipeline
-    command = [version, "-i", mat, "-n", "2", "-S", start, "-E", end, "-d", "filtering/data"]
+    #command = [version, "-i", mat, "-n", "2", "-S", start, "-E", end, "-d", "filtering/data"]
+    #NOTE: Testing n = 10 (ripples-fast default)
+    command = [version, "-i", mat, "-n", "10", "-S", start, "-E", end, "-d", "filtering/data"]
     return command
 
 # Start total runtime for instance
