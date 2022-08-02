@@ -26,18 +26,19 @@ reference = sys.argv[8]
 raw_sequences = sys.argv[9]
 # Log to output runtime information for each partition
 logging = sys.argv[10]  
+num_descendants = sys.argv[11]
 
 pipeline_dir = os.getcwd()
 
 def convert(n):
     return str(datetime.timedelta(seconds = n))
 
-def parse_ripples_command(version, mat, start, end):
+def parse_ripples_command(version, mat, start, end, num_descendants):
     # Expecting ripples output (recombination.txt and descendents.txt)
     # in recombination/filtering to start this pipeline
     #command = [version, "-i", mat, "-n", "2", "-S", start, "-E", end, "-d", "filtering/data"]
     #NOTE: Testing n = 10 (ripples-fast default)
-    command = [version, "-i", mat, "-n", "10", "-S", start, "-E", end, "-d", "filtering/data"]
+    command = [version, "-i", mat, "-n", num_descendants, "-S", start, "-E", end, "-d", "filtering/data"]
     return command
 
 # Start total runtime for instance
@@ -63,7 +64,7 @@ if not os.path.exists(raw_sequences):
 start_ripples = timeit.default_timer()
 
 # Run ripples on current GCP instance
-cmd = parse_ripples_command(version, mat, start_range, end_range)
+cmd = parse_ripples_command(version, mat, start_range, end_range, num_descendants)
 subprocess.run(cmd)
 
 # Stop timer for RIPPLES

@@ -45,8 +45,8 @@ def convert(n):
     return str(datetime.timedelta(seconds = n))
 
 def parse_command(mat, start, end, out, logging):
-    command = "python3 process.py {} {} {} {} {} {} {} {} {} {}".format(version,
-            mat, start, end, out, bucket_id, results, reference, raw_sequences, logging)
+    command = "python3 process.py {} {} {} {} {} {} {} {} {} {} {}".format(version,
+            mat, start, end, out, bucket_id, results, reference, raw_sequences, logging, num_descendants)
     return command
 
 # Takes in .gz newick and metadata 
