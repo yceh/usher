@@ -42,11 +42,19 @@ ENV PATH="/root/miniconda3/bin:${PATH}"
 
 RUN conda install mamba -n base -c conda-forge
 RUN mamba install -y -c conda-forge -c bioconda snakemake-minimal numpy pyyaml
-RUN pip3 install chronumental
+RUN pip3 install chronumental google-cloud-storage
 
 # Install faSomeRecords
 RUN rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/linux.x86_64/faSomeRecords /usr/bin
 RUN chmod +x /usr/bin/faSomeRecords
+
+# Install faRenameRecords
+RUN wget https://hgwdev.gi.ucsc.edu/~angie/faRenameRecords /usr/bin
+RUN chmod +x /usr/bin/faRenameRecords
+
+# Install tawk
+RUN wget https://raw.githubusercontent.com/ucscGenomeBrowser/kent/master/src/utils/tawk /usr/bin
+RUN chmod +x /usr/bin/tawk
 
 WORKDIR /HOME
 
