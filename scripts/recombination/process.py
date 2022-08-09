@@ -72,8 +72,7 @@ stop_ripples = timeit.default_timer()
 
 # Start runtime for filtration pipeline
 start_filtration = timeit.default_timer()
-
-filtration = ["./run_ripples_filtration.sh", mat, raw_sequences, reference, results, out]
+filtration = ["./run_ripples_filtration.sh", mat, raw_sequences, reference, results, out, bucket_id]
 # Run putative recombinants through post-processing filtration pipeline
 subprocess.run(filtration)
 

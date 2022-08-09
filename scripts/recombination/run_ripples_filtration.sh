@@ -3,10 +3,11 @@
 # Run script to run filtration and QC pipeline on putative recombinants detected by RIPPLES
 
 mat="$1"
-raw_sequences="$2"
+date="$2"
 reference="$3"
 results="$4"
 out="$5"
+bucket_id="$6"
 
 # Create output results directories
 mkdir -p results
@@ -39,7 +40,7 @@ python3 filtering/makeSampleInfo.py
 # Get raw sequences for all descendant nodes,
 # align them to reference and perform QC steps 
 # to generate final_report.txt (see report_meaning.txt)
-./filtering/generate_report.sh $raw_sequences $reference
+./filtering/generate_report.sh $bucket_id $date $reference
 echo "Successfully generated final_report.txt"
 
 # Run 3seq program on mnk_no_duplicates.txt values

@@ -2,24 +2,23 @@
 #
 # Get the raw sequences for all the descendents
 
-# Raw sequence file was copied from GCP Storage Bucket to local directory, 
-# passed to this script through first argument.
-all_sequences_fasta=$1
-
-# SARS-CoV-2 reference genome copied from GCP Storage Bucket to local directory, 
-# passed to this script through second argument.
-reference=$2  
+bucket_id="$1"
+date="$2"
+reference="$3"
 startDir=$PWD
 cores=`grep -c ^processor /proc/cpuinfo`
 
 # Check correct number of args passed
-if [ "$#" -ne 2 ]; then
+if [ "$#" -ne 3 ]; then
     echo "ERROR: Incorrect number of arguments passed."
 fi
 
 mkdir -p filtering/fastas
 cp $reference filtering/fastas/reference.fa
-cp $all_sequences_fasta filtering/fastas/extractedSeqs.fa
+
+chmod +x filtering/get_raw_sequences.sh
+./filtering/get_raw_sequences.sh -b $bucket_id -d $date -i filtering/data -o filtering/data
+cp filtering/data/allDescendants.fa filtering/fastas/extractedSeqs.fa
 
 mkdir -p filtering/fastas/OrderedRecombs
 mkdir -p filtering/fastas/AlignedRecombs
