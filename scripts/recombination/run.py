@@ -46,7 +46,7 @@ def convert(n):
 
 def parse_command(mat, start, end, out, logging):
     command = "python3 process.py {} {} {} {} {} {} {} {} {} {} {}".format(version,
-            mat, start, end, out, bucket_id, results, reference, raw_sequences, logging, num_descendants)
+            mat, start, end, out, bucket_id, results, reference, date, logging, num_descendants)
     return command
 
 # Takes in .gz newick and metadata 
@@ -106,7 +106,6 @@ newick = config["newick"]
 metadata = config["metadata"]
 date = config["date"]
 reference = config["reference"]
-raw_sequences = config["raw_sequences"]
 num_descendants = config["num_descendants"]
 
 # Remote location in GCP Storge Bucket to copy filtered recombinants
@@ -162,7 +161,7 @@ for partition in partitions:
     log = logging + out + ".log"
 
     # The following command gets executed on remote machine: 
-    # python3 process.py <version> <tree.pb> <start> <end> <bucket_id> <output_dir> <reference> <raw_sequences>
+    # python3 process.py <version> <mat> <start> <end> <out> <bucket_id> <results> <reference> <date> <logging> <num_descendants>
     command = parse_command(mat, start_range, end_range, out, logging)
 
     info = gcloud_run(command, log)

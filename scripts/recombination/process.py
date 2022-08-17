@@ -23,7 +23,7 @@ bucket_id = sys.argv[6]
 # Remote GCP Storage Bucket location to put end results
 results = sys.argv[7]
 reference = sys.argv[8]
-raw_sequences = sys.argv[9]
+date = sys.argv[9]
 # Log to output runtime information for each partition
 logging = sys.argv[10]  
 num_descendants = sys.argv[11]
@@ -57,8 +57,6 @@ if not os.path.exists(mat):
   subprocess.run(["gsutil", "cp", "gs://{}/{}".format(bucket_id, mat), pipeline_dir])
 if not os.path.exists(reference):
   subprocess.run(["gsutil", "cp", "gs://{}/{}".format(bucket_id, reference), pipeline_dir])
-if not os.path.exists(raw_sequences):
-  subprocess.run(["gsutil", "cp", "gs://{}/{}".format(bucket_id, raw_sequences), pipeline_dir])
 
 # start runtime for RIPPLES
 start_ripples = timeit.default_timer()
@@ -72,7 +70,7 @@ stop_ripples = timeit.default_timer()
 
 # Start runtime for filtration pipeline
 start_filtration = timeit.default_timer()
-filtration = ["./run_ripples_filtration.sh", mat, raw_sequences, reference, results, out, bucket_id]
+filtration = ["./run_ripples_filtration.sh", mat, date, reference, results, out, bucket_id]
 # Run putative recombinants through post-processing filtration pipeline
 subprocess.run(filtration)
 
