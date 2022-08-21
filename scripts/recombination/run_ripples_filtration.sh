@@ -56,7 +56,7 @@ python3 filtering/doNewTieBreakers.py
 
 python3 filtering/removeRedundant.py   
 # Copy detected and filtered recombination to GCP Storage
-gsutil cp results/final_recombinants.txt $results/$out
+gsutil cp results/filtered_recombinants.txt $results/$out
 
 
 echo "Pipeline finished. List of recombinants detected in 'results/' directory."

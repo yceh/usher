@@ -226,7 +226,7 @@ for directory in os.listdir(temp):
     files = os.listdir(subdir)
     for file in files:
       # Skip over recombination.tsv and descendents.tsv files for aggregating recombination events
-      if "final_recombinants.txt" in file:
+      if "filtered_recombinants.txt" in file:
         f1 = open(subdir + "/" +  file, "r")
         for line in f1:
           # One detected recombinant per line, aggregate all lines in each file
