@@ -39,6 +39,8 @@ def removeRedundantTrios():
             splitLine = (line.strip()).split('\t')
             myTrios.append([int(splitLine[0]),int(splitLine[3]),int(splitLine[6])])
             trioToLine[str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6])] = splitLine
+            if splitLine[13] == "NA":
+                continue
             if splitLine[13].startswith('0/'):
                 splitLine[13] = (1.0/float(splitLine[13][2:]))
             trioToPVal[str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6])] = float(splitLine[13])
@@ -74,7 +76,7 @@ def removeRedundantTrios():
         if not t in toRemove:
             myOutString += joiner(trioToLine[t])+'\n'
     #open('results/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClustersNewTiebreak3seqP02RussPval005RemoveCircular.txt','w').write(myOutString)
-    open('results/final_recombinants.txt','w').write(myOutString)
+    open('results/filtered_recombinants.txt','w').write(myOutString)
 
 
 
