@@ -7,7 +7,8 @@
 text_parser::text_parser(const std::string &path) {
     auto fp = fopen(path.c_str(), "rb");
     if (fp == NULL) {
-        printf("File does not exist or cannot be opened.\n");
+        printf("TEXT_PARSER ERROR: File does not exist or cannot be opened. "
+               "Check input files exist.\n");
         exit(1);
     }
 
@@ -29,9 +30,7 @@ text_parser::text_parser(const std::string &path) {
     }
 }
 
-text_parser::~text_parser() {
-    delete[] data;
-}
+text_parser::~text_parser() { delete[] data; }
 
 void text_parser::next_line() {
     // Check end of file reached

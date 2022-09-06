@@ -5,7 +5,7 @@ key_file: /tmp/keys/
 
 # GCP machine and Storage Bucket config
 instances: 
-boot_disk_size: 30
+boot_disk_size: 100
 machine_type: 
 logging: 
 
@@ -16,6 +16,7 @@ newick:
 metadata:
 date: 
 results: 
+ranked_results_file: 
 reference:
 
 # Ripples parameters [OPTIONAL]. Leave blank to use default values.

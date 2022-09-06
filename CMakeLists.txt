@@ -56,6 +56,7 @@ file(GLOB RIPPLES_SRCS "src/ripples/*.cpp" "src/ripples/*.hpp")
 file(GLOB USHER_SAMPLED_SRCS "src/usher-sampled/static_tree_mapper/*" "src/usher-sampled/*.cpp" "src/usher-sampled/*.hpp")
 file(GLOB RIPPLES_FAST_SRCS "src/ripples/ripples_fast/*.cpp" "src/ripples/ripples_fast/*.hpp")
 file(GLOB RIPPLES_UTILS_SRCS "src/ripples/util/*.cpp" "src/ripples/util/*.hpp")
+file(GLOB POST_FILTRATION_SRCS "src/ripples/post_filtration/*.cpp" "src/ripples/post_filtration/*.hpp")
 
 set_source_files_properties(src/mutation_annotated_tree.cpp PROPERTIES COMPILE_FLAGS -O3)
 set_source_files_properties(src/usher-sampled/wait_debug.cpp PROPERTIES COMPILE_FLAGS -O0)
@@ -114,7 +115,17 @@ if(DEFINED Protobuf_PATH)
         src/mutation_annotated_tree.cpp
         src/usher_mapper.cpp
         src/matUtils/describe.cpp
-				${RIPPLES_UTILS_SRCS}
+        ${RIPPLES_UTILS_SRCS}
+        )
+
+    add_executable(post_filtration
+        src/mutation_annotated_tree.cpp
+        src/usher_mapper.cpp
+        src/matUtils/describe.cpp
+        src/ripples/util/text_parser.cpp
+        ${POST_FILTRATION_SRCS}
+        ${PROTO_SRCS}
+        ${PROTO_HDRS}
         )
 
     add_executable(ripplesInit
@@ -224,8 +235,15 @@ if(DEFINED Protobuf_PATH)
 
     protobuf_generate(
         LANGUAGE cpp
+        TARGET post_filtration
+        PROTOS parsimony.proto)
+
+
+    protobuf_generate(
+        LANGUAGE cpp
         TARGET ripplesInit
         PROTOS parsimony.proto)
+
     protobuf_generate(
         LANGUAGE cpp
         TARGET matOptimize
@@ -336,7 +354,17 @@ else()
         src/mutation_annotated_tree.cpp
         src/usher_mapper.cpp
         src/matUtils/describe.cpp
-				${RIPPLES_UTILS_SRCS}
+        ${RIPPLES_UTILS_SRCS}
+        ${PROTO_SRCS}
+        ${PROTO_HDRS}
+        )
+
+    add_executable(post_filtration
+        src/mutation_annotated_tree.cpp
+        src/usher_mapper.cpp
+        src/matUtils/describe.cpp
+        src/ripples/util/text_parser.cpp
+        ${POST_FILTRATION_SRCS}
         ${PROTO_SRCS}
         ${PROTO_HDRS}
         )
@@ -501,6 +529,7 @@ TARGET_LINK_LIBRARIES(matUtils PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED
 
 TARGET_LINK_LIBRARIES(ripplesUtils PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
 TARGET_LINK_LIBRARIES(ripplesInit PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
+TARGET_LINK_LIBRARIES(post_filtration PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)
 
 TARGET_COMPILE_OPTIONS(ripples PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
 TARGET_LINK_LIBRARIES(ripples PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES}) # OpenMP::OpenMP_CXX)

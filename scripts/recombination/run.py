@@ -50,9 +50,14 @@ def parse_command(mat, start, end, out, logging):
     return command
 
 # Takes in .gz newick and metadata 
-def parse_chron_command(newick, metadata, steps):
-    command = "chronumental --tree {} --dates {} --steps {}".format(newick, metadata, steps)
+def parse_chron_command(newick, metadata, reference_node, steps):
+    command = ["chronumental", "--tree", newick, "--dates", metadata, "--reference_node", reference_node, "--steps", steps]
     return command
+
+# Generate run command for final recombination list and ranking
+def post_process(mat, filtration_results_file, chron_dates_file, date, recomb_output_file):
+    cmd = ["post_filtration", "-i", mat, "-f", filtration_results_file, "-c", chron_dates_file, "-d", date, "-r", recomb_output_file]
+    return cmd
 
 def gcloud_run(command, log):
     cmd = ["gcloud", "beta", "lifesciences", "pipelines", "run",
@@ -109,7 +114,7 @@ reference = config["reference"]
 num_descendants = config["num_descendants"]
 
 # Remote location in GCP Storge Bucket to copy filtered recombinants
-#TODO: Make sure this folder is created in Storage bucket ahead of time.
+#NOTE: Make sure this folder is created in Storage bucket ahead of time.
 # Use gcloud client libary
 results = "gs://{}/{}".format(bucket_id, config["results"])
 
@@ -121,10 +126,11 @@ if not os.path.isfile("{}/{}".format(current,mat)):
 else:
     print("Input MAT found in local directory.")
 
-# Check logging file created on GCP bucket  #TODO: Check the logging file exists on GCP bucket, otherwise create it ...
+# Check logging file created on GCP bucket
 if not logging.endswith("/"):
     logging += "/"
 
+print("Finding the number of long branches.")
 if num_descendants == None:
   init = "ripplesInit -i {}".format(mat)
 elif isinstance(num_descendants, int):
@@ -218,7 +224,6 @@ recombinants = open(local_results + "/recombinants_{}.txt".format(date), "w")
 unfiltered_recombinants = open(local_results + "/unfiltered_recombinants_{}.txt".format(date), "w")
 
 # Aggregate the results from all remote machines and combine into one final file in 'results/' dir
-# TODO: gcloud client function
 for directory in os.listdir(temp):
     subdir = temp + directory 
     print("SUBDIR: ", subdir)
@@ -244,5 +249,20 @@ unfiltered_recombinants.close()
 
 # Remove temp directory 
 #subprocess.run(["rm", "-r", temp])
+print("Filtered recombination events results written to {}/recombinants_{}.txt".format(local_results,date))
+
+# Rank recombinants and generate final recombinant node information output file
+filtration_results_file = "{}/recombinants_{}.txt".format(local_results,date)
+# Assumes Chronumental inferred dates file output to current directory
+chron_dates_file = "chronumental_dates_{}.tsv".format(metadata)
+recomb_output_file = "{}/final_recombinants_{}.txt".format(local_results, date)
+
+cmd = post_process(mat, filtration_results_file, chron_dates_file, date, recomb_output_file)
+print(cmd)
+subprocess.run(cmd)
+
+
+# Copy over final results file to GCP storage bucket
+subprocess.run(["gsutil", "cp", recomb_output_file, results])
 
 print("Final recombination event results written to {}/recombinants_{}.txt".format(local_results,date))
