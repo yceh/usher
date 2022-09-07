@@ -3,6 +3,7 @@
 #include <boost/program_options.hpp>
 #include <fstream>
 #include <iostream>
+#include <string>
 
 namespace po = boost::program_options;
 
@@ -16,8 +17,14 @@ int main(int argc, char **argv) {
         "pipeline [REQUIRED].")(
         "date,d", po::value<std::string>()->required(),
         "MAT tree date (format: year-month-day, eg. 2022-08-14) [REQUIRED].")(
-        "chronumental-dates,c", po::value<std::string>()->required(),
-        "Output inferred dates file from running Chronumental [REQUIRED].")(
+        "chronumental-dates,c", po::value<std::string>()->default_value(""),
+        "If using Chronumental, give output inferred dates file from running "
+        "Chronumental. Otherwise earliest date from recombinant node "
+        "descendants will be used. ")(
+
+        "metadata,m", po::value<std::string>()->default_value(""),
+        "If not using Chronumental, give MAT metadata file which contains "
+        "dates for all descendants.")(
         "final-recombinants,r", po::value<std::string>()->required(),
         "Output file containing filtered recombinants with all "
         "information needed for Recombination Tracker UI [REQUIRED].");
@@ -49,11 +56,17 @@ int main(int argc, char **argv) {
     std::string final_recomb_file = vm["final-recombinants"].as<std::string>();
     std::string tree_date = vm["date"].as<std::string>();
     std::string chron_dates_file = vm["chronumental-dates"].as<std::string>();
+    std::string metadata_file = vm["metadata"].as<std::string>();
 
     // Load input MAT and uncondense tree
     printf("Loading input MAT file\n");
     MAT::Tree T = MAT::load_mutation_annotated_tree(input_mat_filename);
     T.uncondense_leaves();
+
+    // Get number of leaves in the tree
+    auto num_leaves = T.get_num_leaves();
+    std::cout << "Tree contains: " << num_leaves << " leaves."
+              << "\n";
 
     // Create new recombinant output file
     std::ofstream outfile{final_recomb_file};
@@ -65,10 +78,6 @@ int main(int argc, char **argv) {
               << "\n";
     std::cout << "Outfile given: " << final_recomb_file << "\n";
 
-    // Load inferred dates for internal nodes from Chronumental output
-    std::unordered_map<std::string, std::string> node_to_inferred_date;
-    tsv_to_dict(chron_dates_file, node_to_inferred_date, 0, 1, true);
-
     // Output file columns
     std::vector<std::string> header_list = {
         "Recombinant Node ID",   "Breakpoint Interval 1",
@@ -77,14 +86,60 @@ int main(int argc, char **argv) {
         "Acceptor Node ID",      "Acceptor Clade",
         "Acceptor Lineage",      "Recombinant Ranking Score"};
 
-    // NOTE: Chronumental will preserve internal node id naming using Newick
-    // generated from  matUtils extract Get information for each column for all
-    // filtered recombinants, including rank score, and output to outfile
-    get_recombination_info(T, tree_date, node_to_inferred_date,
-                           filtered_recomb_file, outfile, header_list);
+    // If Chronumental inferred internal dates file provided, use this method
+    if (chron_dates_file != "") {
+        std::cout << "Chronumental inferred dates file given: "
+                  << chron_dates_file << "\n";
+        std::cout << "Using Chronumental for recombinant node ranking."
+                  << "\n";
 
-    std::cout << "Final recombination results written to:  " << final_recomb_file
-              << "\n";
+        // Load inferred dates for internal nodes from Chronumental output
+        std::unordered_map<std::string_view, std::string_view>
+            node_to_inferred_date;
+        node_to_inferred_date.reserve(num_leaves);
+        //tsv_to_dict_test(chron_dates_file, node_to_inferred_date, 0, 1, true);
+        tsv_to_dict(chron_dates_file, node_to_inferred_date, 0, 1, true);
+
+        // NOTE: Chronumental will preserve internal node id naming using Newick
+        // generated from  matUtils extract Get information for each column for
+        // all filtered recombinants, including rank score, and output to
+        // outfile
+        get_recombination_info(T, tree_date, node_to_inferred_date,
+                               filtered_recomb_file, outfile, header_list);
+    }
+    // If no Chronumental inferred dates file given, use alternate method
+    // of chosing recombinant node descendant with earliest date
+    else {
+        // If Chronumental not used, check to make sure metadata input file
+        // given
+        if (metadata_file == "") {
+            throw std::runtime_error(
+                "ERROR: If not using Chronumental (-c flag), then metadata "
+                "file must be provided through --metadata (-m) flag");
+        }
+        if (metadata_file.substr(metadata_file.find_last_of(".") + 1) == "gz") {
+            throw std::runtime_error("Input metadata file must be unzipped and "
+                                     "provided through --metadata (-m) flag");
+        }
+        std::cout << "Using alternate earliest descendant date method for "
+                     "recombinant node ranking."
+                  << "\n";
+
+        // Load MAT metadata into dictionary to get dates for descendants
+        std::unordered_map<std::string_view, std::string_view>
+            descendant_to_date;
+        descendant_to_date.reserve(num_leaves);
+        tsv_to_dict(metadata_file, descendant_to_date, 0, 2, true);
+
+        // Get all recombinant node information, rank recombinants and write to
+        // given output file
+        get_recombination_info_using_descendants(
+            T, tree_date, filtered_recomb_file, descendant_to_date, outfile,
+            header_list);
+    }
+
+    std::cout << "Final recombination results written to:  "
+              << final_recomb_file << "\n";
 
     outfile.close();
 

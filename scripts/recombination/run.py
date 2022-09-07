@@ -2,6 +2,7 @@
 #
 # Launch script to run parallel ripples jobs on GCP
 import subprocess
+from multiprocessing import Process
 import sys
 import time
 import os
@@ -50,9 +51,20 @@ def parse_command(mat, start, end, out, logging):
     return command
 
 # Takes in .gz newick and metadata 
-def parse_chron_command(newick, metadata, reference_node, steps):
+#def parse_chron_command(newick, metadata, reference_node, steps):
+#    command = ["chronumental", "--tree", newick, "--dates", metadata, "--reference_node", reference_node, "--steps", steps]
+#    return command
+
+def run_chronumental(newick, metadata, reference_node, steps):
+    log_file = open("chronumental_stdout.log", "w")
     command = ["chronumental", "--tree", newick, "--dates", metadata, "--reference_node", reference_node, "--steps", steps]
-    return command
+    p = subprocess.Popen(command, stdout=log_file)
+    return p
+
+def newick_from_mat(mat, out_newick):
+    command = ["matUtils", "extract", "-i", mat, "-t", out_newick]
+    p = subprocess.run(command)
+    return p
 
 # Generate run command for final recombination list and ranking
 def post_process(mat, filtration_results_file, chron_dates_file, date, recomb_output_file):
@@ -118,13 +130,29 @@ num_descendants = config["num_descendants"]
 # Use gcloud client libary
 results = "gs://{}/{}".format(bucket_id, config["results"])
 
-# Copy over protobuf from GCP storage bucket to local container
 current = str(os.getcwd())
+
+# Copy over protobuf and metadata file from GCP storage bucket to local container
 if not os.path.isfile("{}/{}".format(current,mat)):
   print("Copying input MAT: {} from GCP Storage bucket into local directory in container.".format(mat))
   subprocess.run(["gsutil", "cp", "gs://{}/{}".format(bucket_id, mat), current])
 else:
     print("Input MAT found in local directory.")
+
+if not os.path.isfile("{}/{}".format(current,metadata)):
+    print("Copying input MAT metadata: {} from GCP Storage bucket into local directory in container.".format(metadata))
+    subprocess.run(["gsutil", "cp", "gs://{}/{}".format(bucket_id, metadata), current])
+else:
+    print("Input MAT metadata found in local directory.")
+
+# Generate newick tree input for Chronumental, if doesn't exist already
+if not os.path.isfile("{}/{}".format(current,newick)):
+    print("Generating newick file from MAT using matUtils extract")
+    newick_from_mat(mat, newick)
+
+# Launch Chronumental job locally
+p1 = Process(target=run_chronumental, args=(newick, metadata, reference_node, steps))
+p1.start()
 
 # Check logging file created on GCP bucket
 if not logging.endswith("/"):
@@ -188,7 +216,9 @@ while not all(completed):
        completed[i] = True
      print("partition: {}, operation_id: {}, done: {}".format(partition, operation_id, done))
      i+=1
-   time.sleep(1)
+   # Query GCP jobs every 2 mins
+   #NOTE: Refresh Service Account crediantials
+   time.sleep(120)
 
 print("All instance jobs have finished.  Aggregating results from remote machines.")
 
@@ -250,6 +280,11 @@ unfiltered_recombinants.close()
 # Remove temp directory 
 #subprocess.run(["rm", "-r", temp])
 print("Filtered recombination events results written to {}/recombinants_{}.txt".format(local_results,date))
+
+# Check to make sure Chronumental job finished successfully (TODO: Check the return value from subprocess also, to make sure it was successful)
+while(p1.is_alive()):
+    print("Chronumental job not finished running yet.")
+    time.sleep(20)
 
 # Rank recombinants and generate final recombinant node information output file
 filtration_results_file = "{}/recombinants_{}.txt".format(local_results,date)

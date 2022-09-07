@@ -9,6 +9,11 @@
 // Format for string date: "2022-08-14"
 // Returns int vector of size 3 [year, month, day]
 std::vector<std::string> format_date(std::string date) {
+    int date_length = 10; // Only accepting dates in format, eg) 2022-11-09
+    if (date.length() != date_length) {
+        throw std::runtime_error("ERROR: format_date() function. Date not in "
+                                 "correct format (date.length() = 10)");
+    }
     std::string delimiter = "-";
     std::vector<std::string> year_month_day;
     int i = 0;
@@ -23,9 +28,10 @@ std::vector<std::string> format_date(std::string date) {
     return year_month_day;
 }
 
-//  Calculate elapsed days from given date to present date.
+//   Calculate elapsed days from given date to present date.
 int elapsed_days(std::string tree_date,
                  std::string inferred_recomb_date) noexcept {
+
     // Parse format of MAT tree date
     auto year_month_day = format_date(tree_date);
     int year = stoi(year_month_day[0]) - 1900; // Years since 1900
@@ -35,8 +41,8 @@ int elapsed_days(std::string tree_date,
     struct std::tm x = {0, 0, 0, day, month, year};
     std::time_t date_1 = std::mktime(&x);
 
-    // Parse format of recombinant node inferred date 
-		auto _year_month_day = format_date(inferred_recomb_date);
+    // Parse format of recombinant node inferred date
+    auto _year_month_day = format_date(inferred_recomb_date);
     int _year = stoi(_year_month_day[0]) - 1900; // Years since 1900
     int _month = stoi(_year_month_day[1]) - 1; // Months since January – [0, 11]
     int _day = stoi(_year_month_day[2]);       // Day of the month – [1, 31]
@@ -116,16 +122,13 @@ void write_recombination_list(
 
 void get_recombination_info(
     MAT::Tree &T, std::string tree_date,
-    std::unordered_map<std::string, std::string> &node_to_inferred_date,
+    std::unordered_map<std::string_view, std::string_view>
+        &node_to_inferred_date,
     std::string filtered_recomb_file, std::ofstream &outfile,
     std::vector<std::string> header_list) {
 
-    text_parser results(filtered_recomb_file);
-
     std::cout << "Opening results file: " << filtered_recomb_file << "\n";
-
-    // Calculate number of elapsed days since input tree date
-    // int days = elapsed_days(tree_date);
+    text_parser results(filtered_recomb_file);
 
     // Keep track of all recomb_node_ids and their associated rank
     std::unordered_map<std::string, Recombinant> recombinants;
@@ -169,8 +172,10 @@ void get_recombination_info(
         // Get number of descendants for recombinant node
         size_t recomb_num_descendants = T.get_num_leaves(recomb);
 
-        // Parse only date from Chronumental inferred dates dictionary
-        std::string inferred_recomb_date = node_to_inferred_date.at(recomb_id);
+        // Parse dates only from Chronumental inferred dates dictionary
+        std::string_view recomb_id_view{recomb_id};
+        std::string inferred_recomb_date =
+            std::string{node_to_inferred_date.at(recomb_id_view)};
         int space_index = inferred_recomb_date.find(" ", 0);
         inferred_recomb_date = inferred_recomb_date.substr(0, space_index);
 
@@ -183,6 +188,112 @@ void get_recombination_info(
         r.recomb_rank = recomb_rank;
         rr.recomb_rank = recomb_rank;
         // Add recombination information to collection of detected recombinants
+        recombinants.insert({recomb_id, r});
+
+        // Keep track of rank score for each detected recombinant
+        ranked_recombs.push_back(rr);
+    }
+    // Sort the recombinants by min score
+    std::sort(ranked_recombs.begin(), ranked_recombs.end(),
+              [](const Ranked_Recombinant &a, const Ranked_Recombinant &b) {
+                  return a.recomb_rank < b.recomb_rank;
+              });
+
+    // Write all final recombinants to output file, in ranked order
+    write_recombination_list(T, recombinants, ranked_recombs, outfile,
+                             header_list);
+}
+
+void get_recombination_info_using_descendants(
+    MAT::Tree &T, std::string tree_date, std::string filtered_recomb_file,
+    std::unordered_map<std::string_view, std::string_view> &descendant_to_date,
+    std::ofstream &outfile, std::vector<std::string> header_list) {
+
+    std::cout << "Opening results file: " << filtered_recomb_file << "\n";
+    text_parser results(filtered_recomb_file);
+
+    // Keep track of all recomb_node_ids and their associated rank
+    std::unordered_map<std::string, Recombinant> recombinants;
+    std::vector<Ranked_Recombinant> ranked_recombs;
+
+    // Get each detected recombinant node from filtration pipeline output
+    for (; !results.done(); results.next_line()) {
+
+        auto recomb_id = std::string{results.get_value(0)};
+        if (std::isdigit(recomb_id.at(0)) == 1) {
+            recomb_id = "node_" + recomb_id;
+        }
+        // Create new recombinant node
+        Recombinant r = Recombinant(recomb_id);
+
+        // Get breakpoint intervals for the recombinant node id
+        std::tuple<std::string_view, std::string_view> bp(results.get_value(1),
+                                                          results.get_value(2));
+        r.breakpoint_intervals = bp;
+
+        // Get donor/acceptor node ids
+        auto donor_id = std::string{results.get_value(3)};
+        if (std::isdigit(donor_id.at(0)) == 1) {
+            donor_id = "node_" + donor_id;
+        }
+
+        auto acceptor_id = std::string{results.get_value(6)};
+        if (std::isdigit(acceptor_id.at(0)) == 1) {
+            acceptor_id = "node_" + acceptor_id;
+        }
+        r.donor_node_id = donor_id;
+        r.acceptor_node_id = acceptor_id;
+
+        // Get the recombinant node, and make sure id exists in tree
+        auto recomb = T.get_node(recomb_id);
+        if (recomb == NULL) {
+            std::cout << "Recomb node is NULL, not finding recomb node id"
+                      << "\n";
+            exit(1);
+        }
+        // Get number of descendants for recombinant node
+        size_t recomb_num_descendants = T.get_num_leaves(recomb);
+
+        // Get all descendants for recombinant node
+        auto descendants_vec = T.get_leaves(recomb_id);
+        if (descendants_vec.size() == 0) {
+            std::cout << "RECOMB NODE ID with no descendants" << recomb_id
+                      << "\n";
+            throw std::runtime_error(
+                "ERROR: Recombinant node doesn't have any descendants.");
+        }
+        // Use earliest date of recomb node descendants (earliest_days) as proxy
+        // for inferred recomb note date
+        int earliest_days = 0;
+        std::string earliest_descendant = "";
+        for (auto node : descendants_vec) {
+            std::string_view n{node->identifier};
+            if (descendant_to_date[n].size() != 10) {
+                continue;
+            }
+            int desc_days =
+                elapsed_days(tree_date, std::string{descendant_to_date[n]});
+            //  Ties don't matter, we just want earliest date
+            if (desc_days > earliest_days) {
+                earliest_descendant = node->identifier;
+                earliest_days = desc_days;
+            }
+        }
+        Ranked_Recombinant rr = Ranked_Recombinant(recomb_id);
+        // Generate recombinant ranking score, using earliest date from set of
+        // recomb node descendants
+        auto recomb_rank =
+            recombinant_rank(earliest_days, recomb_num_descendants);
+
+        if (recomb_rank == 0.0) {
+            // Move to next recombinant, incomplete date information for this
+            // recombinant node, for all node descendants in metadata
+            continue;
+        }
+        r.recomb_rank = recomb_rank;
+        rr.recomb_rank = recomb_rank;
+        // Add recombination information to collection of detected
+        // recombinants
         recombinants.insert({recomb_id, r});
 
         // Keep track of rank score for each detected recombinant
@@ -232,9 +343,11 @@ void chron_id_mapping(MAT::Tree &T,
     }
 }
 
+//  Extract two columns from a TSV file to act as dictionary,
+//  one as key, the other as value
 void tsv_to_dict(std::string tsv_file,
-                 std::unordered_map<std::string, std::string> &map, int key_col,
-                 int val_col, bool header) {
+                 std::unordered_map<std::string_view, std::string_view> &map,
+                 int key_col, int val_col, bool header) {
     text_parser file_handle(tsv_file);
 
     // If file has header, skip over first header line
@@ -244,8 +357,8 @@ void tsv_to_dict(std::string tsv_file,
     }
 
     for (; !file_handle.done(); file_handle.next_line()) {
-        auto key = std::string{file_handle.get_value(key_col)};
-        auto value = std::string{file_handle.get_value(val_col)};
+        std::string_view key = file_handle.get_value(key_col);
+        std::string_view value = file_handle.get_value(val_col);
         map.insert({key, value});
     }
 }
