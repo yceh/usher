@@ -3,6 +3,7 @@
 # Launch script to run parallel ripples jobs on GCP
 import subprocess
 from multiprocessing import Process
+from google.cloud import storage
 import sys
 import time
 import os
@@ -42,6 +43,15 @@ def get_partitions(long_branches, instances):
         k += per_instance + 1
     return partitions
 
+def create_bucket_folder(project_id, bucket_id, path_from_bucket_root):
+    # Check to make sure folder ends with backslash, add if not
+    if not path_from_bucket_root.endswith("/"):
+        path_from_bucket_root += "/"
+    client = storage.Client(project=project_id)
+    bucket = client.get_bucket(bucket_id)
+    blob = bucket.blob(path_from_bucket_root)
+    result = blob.upload_from_string('')
+
 def convert(n):
     return str(datetime.timedelta(seconds = n))
 
@@ -50,12 +60,9 @@ def parse_command(mat, start, end, out, logging):
             mat, start, end, out, bucket_id, results, reference, date, logging, num_descendants)
     return command
 
-# Takes in .gz newick and metadata 
-#def parse_chron_command(newick, metadata, reference_node, steps):
-#    command = ["chronumental", "--tree", newick, "--dates", metadata, "--reference_node", reference_node, "--steps", steps]
-#    return command
-
-def run_chronumental(newick, metadata, reference_node, steps):
+def run_chronumental(newick, metadata):
+    reference_node = "DP0803|LC571037.1|2020-02-17"
+    steps = "100"
     log_file = open("chronumental_stdout.log", "w")
     command = ["chronumental", "--tree", newick, "--dates", metadata, "--reference_node", reference_node, "--steps", steps]
     p = subprocess.Popen(command, stdout=log_file)
@@ -90,7 +97,12 @@ def gcloud_run(command, log):
     id = re.search("operations\/(\d+)", name).groups()[0]
     return {'operation_id': id, 'result': result}
 
-def gcloud_describe(operation_id):
+def gcloud_describe(operation_id, key_file):
+     # Refresh service account credentials
+     auth = ["gcloud", "auth", "activate-service-account", "--quiet", "--key-file", key_file]
+     print("Refreshing Service Account credentials.")
+     subprocess.run(auth)
+     print("Checking job status")
      cmd = ["gcloud", "beta", "lifesciences",
             "operations", "describe", "--format=json", operation_id]
      out = subprocess.check_output(cmd)
@@ -126,9 +138,19 @@ reference = config["reference"]
 num_descendants = config["num_descendants"]
 
 # Remote location in GCP Storge Bucket to copy filtered recombinants
-#NOTE: Make sure this folder is created in Storage bucket ahead of time.
-# Use gcloud client libary
 results = "gs://{}/{}".format(bucket_id, config["results"])
+
+# Check logging file created on GCP bucket
+if not logging.endswith("/"):
+    logging += "/"
+
+# Create remote logging folder
+create_bucket_folder(project_id, bucket_id, logging)
+print("Created empty GCP storage bucket folder for logging: {}".format(config["logging"]))
+
+# Create remote results folder
+create_bucket_folder(project_id, bucket_id, config["results"])
+print("Created empty GCP storage bucket folder for results: {}".format(config["results"]))
 
 current = str(os.getcwd())
 
@@ -151,12 +173,8 @@ if not os.path.isfile("{}/{}".format(current,newick)):
     newick_from_mat(mat, newick)
 
 # Launch Chronumental job locally
-p1 = Process(target=run_chronumental, args=(newick, metadata, reference_node, steps))
+p1 = Process(target=run_chronumental, args=(newick, metadata)
 p1.start()
-
-# Check logging file created on GCP bucket
-if not logging.endswith("/"):
-    logging += "/"
 
 print("Finding the number of long branches.")
 if num_descendants == None:
@@ -210,14 +228,13 @@ while not all(completed):
    for process in processes:
      partition = process['partition']
      operation_id = process['operation_id']
-     info = gcloud_describe(operation_id)
+     info = gcloud_describe(operation_id, key_file)
      done = info['done']
      if done:
        completed[i] = True
      print("partition: {}, operation_id: {}, done: {}".format(partition, operation_id, done))
      i+=1
-   # Query GCP jobs every 2 mins
-   #NOTE: Refresh Service Account crediantials
+   # Query active GCP jobs every 2 mins
    time.sleep(120)
 
 print("All instance jobs have finished.  Aggregating results from remote machines.")
@@ -252,6 +269,7 @@ subprocess.run(["gsutil", "cp", "-r", remote_results, temp])
 # File to aggregate all detected recombination events
 recombinants = open(local_results + "/recombinants_{}.txt".format(date), "w")
 unfiltered_recombinants = open(local_results + "/unfiltered_recombinants_{}.txt".format(date), "w")
+descendants = open(local_results + "/descendants_{}.txt".format(date), "w")
 
 # Aggregate the results from all remote machines and combine into one final file in 'results/' dir
 for directory in os.listdir(temp):
@@ -273,15 +291,21 @@ for directory in os.listdir(temp):
           # One detected recombinant per line, aggregate all lines in each file
           unfiltered_recombinants.write(line)
         f2.close()
-      #TODO: Aggregate all descendents
+      if "descendants.tsv" in file:
+        f3 = open(subdir + "/" +  file, "r")
+        for line in f3:
+          # One detected recombinant per line, aggregate all lines in each file
+          descendants.write(line)
+        f3.close()
 recombinants.close()
+descendents.close()
 unfiltered_recombinants.close()
 
 # Remove temp directory 
 #subprocess.run(["rm", "-r", temp])
 print("Filtered recombination events results written to {}/recombinants_{}.txt".format(local_results,date))
 
-# Check to make sure Chronumental job finished successfully (TODO: Check the return value from subprocess also, to make sure it was successful)
+# Check to make sure Chronumental job finished successfully
 while(p1.is_alive()):
     print("Chronumental job not finished running yet.")
     time.sleep(20)
@@ -292,10 +316,9 @@ filtration_results_file = "{}/recombinants_{}.txt".format(local_results,date)
 chron_dates_file = "chronumental_dates_{}.tsv".format(metadata)
 recomb_output_file = "{}/final_recombinants_{}.txt".format(local_results, date)
 
-cmd = post_process(mat, filtration_results_file, chron_dates_file, date, recomb_output_file)
+cmd = post_process(mat, filtration_results_file, chron_dates_file, str(config["date"]), recomb_output_file)
 print(cmd)
 subprocess.run(cmd)
-
 
 # Copy over final results file to GCP storage bucket
 subprocess.run(["gsutil", "cp", recomb_output_file, results])
