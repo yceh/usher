@@ -173,7 +173,7 @@ if not os.path.isfile("{}/{}".format(current,newick)):
     newick_from_mat(mat, newick)
 
 # Launch Chronumental job locally
-p1 = Process(target=run_chronumental, args=(newick, metadata)
+p1 = Process(target=run_chronumental, args=(newick, metadata))
 p1.start()
 
 print("Finding the number of long branches.")
@@ -298,7 +298,7 @@ for directory in os.listdir(temp):
           descendants.write(line)
         f3.close()
 recombinants.close()
-descendents.close()
+descendants.close()
 unfiltered_recombinants.close()
 
 # Remove temp directory 
