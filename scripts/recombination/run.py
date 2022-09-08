@@ -323,4 +323,4 @@ subprocess.run(cmd)
 # Copy over final results file to GCP storage bucket
 subprocess.run(["gsutil", "cp", recomb_output_file, results])
 
-print("Final recombination event results written to {}/recombinants_{}.txt".format(local_results,date))
+print("Final recombination event results written to {}".format(recomb_output_file))

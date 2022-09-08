@@ -11,6 +11,10 @@ struct Recombinant {
     std::string recomb_node_id;
     std::string donor_node_id;
     std::string acceptor_node_id;
+    std::string informative_seq; // eg) "AAAAAAAAAAABBB"
+    std::string mnk_3seq_values; // eg) "(M,N,K)"
+    std::string p_value_3seq;
+    std::string descendants;
     std::tuple<std::string, std::string>
         breakpoint_intervals; // Breakpoint interval <1,2>
 

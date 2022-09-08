@@ -79,6 +79,20 @@ void write_recombination_list(
         outfile << std::get<0>(r.breakpoint_intervals) << "\t";
         outfile << std::get<1>(r.breakpoint_intervals) << "\t";
 
+        // Write recomb node clade and lineage
+        // Lookup recomb node and check it exists in tree
+        auto recomb = T.get_node(rr.recomb_node_id);
+        if (recomb == NULL) {
+            std::cout << "Recomb node is NULL, not finding recomb node id"
+                      << "\n";
+            exit(1);
+        }
+        // Get recomb clade (nextstrain) and lineage (pangolin designation)
+        auto recomb_clade = T.get_clade_assignment(recomb, 0);
+        auto recomb_lineage = T.get_clade_assignment(recomb, 1);
+        outfile << recomb_clade << "\t";
+        outfile << recomb_lineage << "\t";
+
         // Write donor node id
         outfile << r.donor_node_id << "\t";
 
@@ -113,6 +127,18 @@ void write_recombination_list(
         auto acceptor_lineage = T.get_clade_assignment(acceptor, 1);
         outfile << acceptor_clade << "\t";
         outfile << acceptor_lineage << "\t";
+
+        // Write descendants
+        outfile << r.descendants << "\t";
+
+        // Write informative sequence
+        outfile << r.informative_seq << "\t";
+
+        // Write 3SEQ (M, N, K) values
+        outfile << r.mnk_3seq_values << "\t";
+
+        // Write 3SEQ P-value
+        outfile << r.p_value_3seq << "\t";
 
         // Write recombinant node ranking score (increasing order)
         outfile << rr.recomb_rank << "\n";
@@ -161,6 +187,23 @@ void get_recombination_info(
         }
         r.donor_node_id = donor_id;
         r.acceptor_node_id = acceptor_id;
+
+        // Get informative site from filtration results file,
+        // which is at column 16
+        r.informative_seq = std::string{results.get_value(16)};
+
+        // Get 3SEQ M, N, K values from filtration results file
+        std::string mnk_values = "(";
+        mnk_values += std::string{results.get_value(17)} + ", ";
+        mnk_values += std::string{results.get_value(18)} + ", ";
+        mnk_values += std::string{results.get_value(19)} + ")";
+        r.mnk_3seq_values = mnk_values;
+
+        // Get 3SEQ P-value from filtration results file
+        r.p_value_3seq = std::string{results.get_value(20)};
+
+        // Get descendants from filtration results file
+        r.descendants = std::string{results.get_value(14)};
 
         // Get the recombinant node, and make sure id exists in tree
         auto recomb = T.get_node(recomb_id);
@@ -262,8 +305,8 @@ void get_recombination_info_using_descendants(
             throw std::runtime_error(
                 "ERROR: Recombinant node doesn't have any descendants.");
         }
-        // Use earliest date of recomb node descendants (earliest_days) as proxy
-        // for inferred recomb note date
+        // Use earliest date of recomb node descendants (earliest_days) as
+        // proxy for inferred recomb note date
         int earliest_days = 0;
         std::string earliest_descendant = "";
         for (auto node : descendants_vec) {
@@ -280,14 +323,14 @@ void get_recombination_info_using_descendants(
             }
         }
         Ranked_Recombinant rr = Ranked_Recombinant(recomb_id);
-        // Generate recombinant ranking score, using earliest date from set of
-        // recomb node descendants
+        // Generate recombinant ranking score, using earliest date from set
+        // of recomb node descendants
         auto recomb_rank =
             recombinant_rank(earliest_days, recomb_num_descendants);
 
         if (recomb_rank == 0.0) {
-            // Move to next recombinant, incomplete date information for this
-            // recombinant node, for all node descendants in metadata
+            // Move to next recombinant, incomplete date information for
+            // this recombinant node, for all node descendants in metadata
             continue;
         }
         r.recomb_rank = recomb_rank;

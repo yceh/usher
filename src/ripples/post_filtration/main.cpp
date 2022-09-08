@@ -79,12 +79,22 @@ int main(int argc, char **argv) {
     std::cout << "Outfile given: " << final_recomb_file << "\n";
 
     // Output file columns
-    std::vector<std::string> header_list = {
-        "Recombinant Node ID",   "Breakpoint Interval 1",
-        "Breakpoint Interval 2", "Donor Node ID",
-        "Donor Clade",           "Donor Lineage",
-        "Acceptor Node ID",      "Acceptor Clade",
-        "Acceptor Lineage",      "Recombinant Ranking Score"};
+    std::vector<std::string> header_list = {"Recombinant Node ID",
+                                            "Breakpoint 1 Interval",
+                                            "Breakpoint 2 Interval",
+                                            "Recombinant Clade",
+                                            "Recombinant Lineage",
+                                            "Donor Node ID",
+                                            "Donor Clade",
+                                            "Donor Lineage",
+                                            "Acceptor Node ID",
+                                            "Acceptor Clade",
+                                            "Acceptor Lineage",
+                                            "Descendants",
+                                            "Informative Site Sequence",
+                                            "3SEQ (M, N, K)",
+                                            "3SEQ P-Value",
+                                            "Recombinant Ranking Score"};
 
     // If Chronumental inferred internal dates file provided, use this method
     if (chron_dates_file != "") {
@@ -97,7 +107,8 @@ int main(int argc, char **argv) {
         std::unordered_map<std::string_view, std::string_view>
             node_to_inferred_date;
         node_to_inferred_date.reserve(num_leaves);
-        //tsv_to_dict_test(chron_dates_file, node_to_inferred_date, 0, 1, true);
+        // tsv_to_dict_test(chron_dates_file, node_to_inferred_date, 0, 1,
+        // true);
         tsv_to_dict(chron_dates_file, node_to_inferred_date, 0, 1, true);
 
         // NOTE: Chronumental will preserve internal node id naming using Newick
