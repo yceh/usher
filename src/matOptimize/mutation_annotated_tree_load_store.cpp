@@ -453,4 +453,4 @@ Mutation_Annotated_Tree::Mutation::Mutation(const std::string &chromosome,
         //assert((refs[position].is_invalid()) || refs[position] == ref);
         refs[position] = ref;
     }
-};
+}

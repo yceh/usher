@@ -320,7 +320,7 @@ static Node* get_subtree_helper(const std::unordered_set<size_t>& nodes_to_place
     } else {
         return child_node[0];
     }
-};
+}
 Mutation_Annotated_Tree::Tree
 Mutation_Annotated_Tree::get_subtree(const Mutation_Annotated_Tree::Tree &tree,
                                      const std::vector<Node *> &samples,

@@ -22,7 +22,6 @@
 #include <tbb/queuing_rw_mutex.h>
 
 namespace MAT=Mutation_Annotated_Tree;
-
 void populate_mutated_pos(const Original_State_t& origin_state,MAT::Tree& tree) {
     tbb::parallel_for_each(origin_state.begin(),origin_state.end(),[&](const std::pair<size_t, Mutation_Set>& sample_mutations) {
         for (const MAT::Mutation &m : sample_mutations.second) {

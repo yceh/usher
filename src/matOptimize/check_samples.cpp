@@ -13,7 +13,7 @@
 #include <vector>
 //add mutation m to parent_mutations, which represent the mutation of a node relative to root,
 //or update major allele if already present
-void ins_mut(Mutation_Set &parent_mutations,const Mutation_Annotated_Tree::Mutation &m,bool is_leaf, const MAT::Node* root) {
+void ins_mut(Mutation_Set &parent_mutations,const Mutation_Annotated_Tree::Mutation &m,bool is_leaf,const MAT::Node* root) {
     auto temp = parent_mutations.insert(m);
     //other major allele of leaf node is also counted
     if(!is_leaf) {
@@ -57,7 +57,7 @@ struct insert_samples_worker:public tbb::task {
         //add mutation of "root"
         for (const Mutation_Annotated_Tree::Mutation &m : root->mutations) {
             if(m.is_valid()||root->is_leaf()) {
-                ins_mut(parent_mutations, m,root->is_leaf(), root);
+                ins_mut(parent_mutations, m,root->is_leaf(),root);
             }
         }
         //output
@@ -96,7 +96,7 @@ struct check_samples_worker:public tbb::task {
         empty->set_ref_count(root->children.size());
         for (const Mutation_Annotated_Tree::Mutation &m : root->mutations) {
             if(m.is_valid()||root->is_leaf()) {
-                ins_mut(parent_mutations, m,root->is_leaf(), root);
+                ins_mut(parent_mutations, m,root->is_leaf(),root);
             };
         }
 

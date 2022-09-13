@@ -621,9 +621,11 @@ std::vector<std::string> find_introductions(MAT::Tree* T, std::unordered_map<std
                     //can't assign region of origin if introduction point is root (no information about parent)
                     if ((region_assignments.size() > 1) & (!a->is_root())) {
                         auto assign_search = region_ins.find(a->identifier);
+                        // float highest_conf = 0.0;
+                        // std::string highest_conf_origin = "indeterminate";
                         //instead of immediately reporting each that pass a high threshold,
                         //collect the set of all that pass a low threshold, sort by confidence, and store only the top Z scores and associated strings.
-                        //use of the greater comparator means that the top() element is the smallest value. 
+                        //std::vector<std::pair<float,std::string>> oriscores;
                         std::priority_queue<std::pair<float,std::string>, std::vector<std::pair<float,std::string>>, std::greater<std::pair<float,std::string>>> oriscores;
                         if (assign_search != region_ins.end()) {
                             size_t count = assign_search->second.size();
@@ -638,39 +640,30 @@ std::vector<std::string> find_introductions(MAT::Tree* T, std::unordered_map<std
                                 }
                                 std::pair<float,std::string> dpair = std::make_pair(region_cons.find(a->identifier)->second[i], assign_search->second[i]);
                                 oriscores.push(dpair);
-                                if ((oriscores.size() > count) && (oriscores.top().first < 1)) {
-                                    //drop the lowest member if we're over count and if the lowest member is less than 1
-                                    //this means we can generate vectors longer than the indicated count of values of 1.
+                                if (oriscores.size() > count) {
+                                    //drop the lowest member if we're over count.
                                     oriscores.pop();
                                 }
                             }
-                            //if we ended up storing a bunch of tied values, more than the count to report, just set it to be indeterminate
-                            //this means that a cluster labeled as indeterminate can have its composition of potential origins revealed 
-                            //by increasing the number of potential origins to report.
-                            if ((oriscores.size() > count) && (oriscores.top().first == 1)) {
-                                origins = "indeterminate: " + std::to_string(oriscores.size()) + " potential origins.";
-                                origins_cons << 1.0;
-                            } else {
-                                while (!oriscores.empty()) {
-                                    auto osp = oriscores.top();
-                                    if (origins.size() == 0) {
-                                        origins += osp.second;
-                                        origins_cons << osp.first;
-                                    } else {
-                                        origins += "," + osp.second;
-                                        origins_cons << "," << osp.first;
-                                    }
-                                    oriscores.pop();
+                            while (!oriscores.empty()) {
+                                auto osp = oriscores.top();
+                                if (origins.size() == 0) {
+                                    origins += osp.second;
+                                    origins_cons << osp.first;
+                                } else {
+                                    origins += "," + osp.second;
+                                    origins_cons << "," << osp.first;
                                 }
+                                oriscores.pop();
                             }
                         } else {
-                            origins = "indeterminate: no information.";
+                            origins = "indeterminate";
                             origins_cons << 0.0;
                         }
                     }
                     if (origins.size() == 0) {
                         //if we didn't find anything which has the pre-introduction node at 1, we don't know where it came from
-                        origins = "indeterminate: no regions with support";
+                        origins = "indeterminate";
                         origins_cons << 0.0;
                     }
                     //collect additional information if requested.
