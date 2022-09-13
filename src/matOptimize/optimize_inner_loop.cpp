@@ -6,9 +6,6 @@ void make_output_path(std::string& path_template) {
 }
 
 size_t optimize_inner_loop(std::vector<MAT::Node*>& nodes_to_search,MAT::Tree& t,int radius,
-#ifdef CHECK_STATE_REASSIGN
-    Original_State_t& origin_states,
-#endif
     bool allow_drift,
     bool search_all_dir,
     int minutes_between_save,
@@ -61,9 +58,6 @@ size_t optimize_inner_loop(std::vector<MAT::Node*>& nodes_to_search,MAT::Tree& t
                     search_stop_time=search_end_time;
                 }
                 optimize_tree_main_thread(nodes_to_search_idx, t,std::abs(radius),movalbe_src_log,allow_drift,log_moves?iteration:-1,defered_nodes,distribute,search_stop_time,do_continue,search_all_dir,isfirst_this_iter
-#ifdef CHECK_STATE_REASSIGN
-                                          , origin_states
-#endif
                                          );
                 isfirst_this_iter=false;
                 fprintf(stderr, "Defered %zu nodes\n",defered_nodes.size());
