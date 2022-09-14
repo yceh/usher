@@ -82,7 +82,9 @@ void clean_tree(MAT::Tree& t) {
     std::vector<MAT::Node*> for_reassign;
     for(auto node_str:changed_nodes) {
         auto node=t.get_node(node_str);
-        for_reassign.push_back(node);
+        if(node){
+            for_reassign.push_back(node);
+        }
     }
     auto cleaned_count=for_reassign.size();
     fprintf(stderr, "%zu nodes cleaned\n",cleaned_count);
