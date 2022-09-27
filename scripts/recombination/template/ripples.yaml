@@ -1,22 +1,21 @@
-# GCP credentials
+# GCP credentials [REQUIRED]
 bucket_id: 
 project_id: 
 key_file: /tmp/keys/
 
-# GCP machine and Storage Bucket config
+# GCP machine and Storage Bucket config [REQUIRED]
 instances: 
 boot_disk_size: 100
 machine_type: 
 logging: 
 
-# Ripples parameters config [REQURIED]
+# Ripples parameters config [REQUIRED]
 version: 
 mat: 
 newick:
 metadata:
 date: 
 results: 
-ranked_results_file: 
 reference:
 
 # Ripples parameters [OPTIONAL]. Leave blank to use default values.
