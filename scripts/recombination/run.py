@@ -43,7 +43,9 @@ def get_partitions(long_branches, instances):
         k += per_instance + 1
     return partitions
 
-def create_bucket_folder(project_id, bucket_id, path_from_bucket_root):
+def create_bucket_folder(project_id, bucket_id, path_from_bucket_root, key_file):
+    # Set environment variable with path to service account key file
+    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = key_file
     # Check to make sure folder ends with backslash, add if not
     if not path_from_bucket_root.endswith("/"):
         path_from_bucket_root += "/"
@@ -145,11 +147,11 @@ if not logging.endswith("/"):
     logging += "/"
 
 # Create remote logging folder
-create_bucket_folder(project_id, bucket_id, logging)
+create_bucket_folder(project_id, bucket_id, logging, key_file)
 print("Created empty GCP storage bucket folder for logging: {}".format(config["logging"]))
 
 # Create remote results folder
-create_bucket_folder(project_id, bucket_id, config["results"])
+create_bucket_folder(project_id, bucket_id, config["results"], key_file)
 print("Created empty GCP storage bucket folder for results: {}".format(config["results"]))
 
 current = str(os.getcwd())
