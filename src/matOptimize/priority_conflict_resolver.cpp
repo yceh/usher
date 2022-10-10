@@ -11,7 +11,7 @@
 #include <vector>
 
 bool Conflict_Resolver::check_single_move_no_conflict(Profitable_Moves_ptr_t& candidate_move)const {
-    int best_score=0;
+    int best_score=INT_MAX-1;
     //gather the minimium parsimony score of all the moves intersecting with this move
     candidate_move->apply_nodes([&best_score,this](MAT::Node* node) {
         if (potential_crosses[node->bfs_index]) {
