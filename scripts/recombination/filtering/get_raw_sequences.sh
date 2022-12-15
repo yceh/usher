@@ -1,4 +1,4 @@
-#!/bin/bash -ex
+#!/bin/bash -x
 # 
 # Script to retrieve fasta sequences for all nodes in descendants.txt
 
