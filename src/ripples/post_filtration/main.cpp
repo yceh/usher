@@ -21,13 +21,12 @@ int main(int argc, char **argv) {
         "If using Chronumental, give output inferred dates file from running "
         "Chronumental. Otherwise earliest date from recombinant node "
         "descendants will be used. ")(
-
         "metadata,m", po::value<std::string>()->default_value(""),
         "If not using Chronumental, give MAT metadata file which contains "
         "dates for all descendants.")(
         "final-recombinants,r", po::value<std::string>()->required(),
         "Output file containing filtered recombinants with all "
-        "information needed for Recombination Tracker UI [REQUIRED].");
+        "information needed for RIVET[REQUIRED].");
 
     po::options_description all_options;
     all_options.add(desc);
@@ -42,8 +41,6 @@ int main(int argc, char **argv) {
         po::notify(vm);
     } catch (std::exception &e) {
         std::cerr << desc << std::endl;
-        // Return with error code 1 unless
-        // the user specifies help
         if (vm.count("help"))
             exit(0);
         else
@@ -72,7 +69,7 @@ int main(int argc, char **argv) {
     std::ofstream outfile{final_recomb_file};
     if (!outfile) {
         throw std::runtime_error(
-            "ERROR: Cannot find filtered recombination results file");
+            "ERROR: Cannot create final recombination output file.");
     }
     std::cout << "Retrieving recombinant node parent clade assignments"
               << "\n";
@@ -80,21 +77,25 @@ int main(int argc, char **argv) {
 
     // Output file columns
     std::vector<std::string> header_list = {"Recombinant Node ID",
+                                            "Donor Node ID",
+                                            "Acceptor Node ID",
                                             "Breakpoint 1 Interval",
                                             "Breakpoint 2 Interval",
                                             "Recombinant Clade",
                                             "Recombinant Lineage",
-                                            "Donor Node ID",
                                             "Donor Clade",
                                             "Donor Lineage",
-                                            "Acceptor Node ID",
                                             "Acceptor Clade",
                                             "Acceptor Lineage",
-                                            "Descendants",
+                                            "Descendant",
                                             "Informative Site Sequence",
                                             "3SEQ (M, N, K)",
                                             "3SEQ P-Value",
-                                            "Recombinant Ranking Score"};
+                                            "Recombinant Ranking Score",
+                                            "Original Parsimony Score",
+                                            "Parsimony Score Improvement"};
+
+    std::vector<std::string> trio_node_ids;
 
     // If Chronumental inferred internal dates file provided, use this method
     if (chron_dates_file != "") {
@@ -107,16 +108,17 @@ int main(int argc, char **argv) {
         std::unordered_map<std::string_view, std::string_view>
             node_to_inferred_date;
         node_to_inferred_date.reserve(num_leaves);
-        // tsv_to_dict_test(chron_dates_file, node_to_inferred_date, 0, 1,
-        // true);
+
         tsv_to_dict(chron_dates_file, node_to_inferred_date, 0, 1, true);
 
         // NOTE: Chronumental will preserve internal node id naming using Newick
-        // generated from  matUtils extract Get information for each column for
+        // generated from  matUtils extract. Get information for each column for
         // all filtered recombinants, including rank score, and output to
-        // outfile
-        get_recombination_info(T, tree_date, node_to_inferred_date,
-                               filtered_recomb_file, outfile, header_list);
+        // outfile.  Return a vector of string node ids for all trio nodes
+        // (recomb, donor, acceptor)
+        trio_node_ids =
+            get_recombination_info(T, tree_date, node_to_inferred_date,
+                                   filtered_recomb_file, outfile, header_list);
     }
     // If no Chronumental inferred dates file given, use alternate method
     // of chosing recombinant node descendant with earliest date
@@ -143,7 +145,8 @@ int main(int argc, char **argv) {
         tsv_to_dict(metadata_file, descendant_to_date, 0, 2, true);
 
         // Get all recombinant node information, rank recombinants and write to
-        // given output file
+        // given output file, return vector of string node_ids for all trio
+        // nodes (recomb, donor, acceptor)
         get_recombination_info_using_descendants(
             T, tree_date, filtered_recomb_file, descendant_to_date, outfile,
             header_list);
@@ -153,7 +156,6 @@ int main(int argc, char **argv) {
               << final_recomb_file << "\n";
 
     outfile.close();
-
     return 0;
 }
 

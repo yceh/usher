@@ -98,8 +98,8 @@ LOG_FILE="log_$TREE_DATE.log"
 mkdir -p $OUTPUT
 sort -u $DESCENDENTS > $OUTPUT/allDescendants.uniq.txt
 
-echo "Number of duplicates: " > $OUTPUT/$LOG_FILE
-echo `(wc -l $DESCENDENTS) - (wc -l $OUTPUT/allDescendants.uniq.txt)` >> $OUTPUT/$LOG_FILE
+#echo "Number of duplicates: " > $OUTPUT/$LOG_FILE
+#echo `(wc -l $DESCENDENTS) - (wc -l $OUTPUT/allDescendants.uniq.txt)` >> $OUTPUT/$LOG_FILE
 
 grep EPI_ISL $OUTPUT/allDescendants.uniq.txt | awk -F\| '{print $2 "\t" $0;}' > $OUTPUT/allDescendants.epiToName
 wc -l $OUTPUT/allDescendants.epiToName
