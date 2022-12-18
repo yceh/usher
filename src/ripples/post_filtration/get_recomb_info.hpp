@@ -47,21 +47,21 @@ void write_recombination_list(
 
 std::vector<std::string>
 get_recombination_info(MAT::Tree &T, std::string tree_date,
-                       std::unordered_map<std::string_view, std::string_view>
+                       std::unordered_map<std::string, std::string>
                            &node_to_inferred_date,
                        std::string filtered_recomb_file, std::ofstream &outfile,
                        std::vector<std::string> header_list);
 
 void get_recombination_info_using_descendants(
     MAT::Tree &T, std::string tree_date, std::string filtered_recomb_file,
-    std::unordered_map<std::string_view, std::string_view> &descendant_to_date,
+    std::unordered_map<std::string, std::string> &descendant_to_date,
     std::ofstream &outfile, std::vector<std::string> header_list);
 
 void chron_id_mapping(MAT::Tree &T,
                       std::unordered_map<std::string, std::string> &id_map);
 
 void tsv_to_dict(std::string tsv_file,
-                 std::unordered_map<std::string_view, std::string_view> &map,
+                 std::unordered_map<std::string, std::string> &map,
                  int key_col, int val_col, bool header);
 
 inline float recombinant_rank(int days, int num_descendants) noexcept {

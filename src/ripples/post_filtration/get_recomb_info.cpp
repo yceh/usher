@@ -221,7 +221,7 @@ void write_recombination_list(
 
 std::vector<std::string>
 get_recombination_info(MAT::Tree &T, std::string tree_date,
-                       std::unordered_map<std::string_view, std::string_view>
+                       std::unordered_map<std::string, std::string>
                            &node_to_inferred_date,
                        std::string filtered_recomb_file, std::ofstream &outfile,
                        std::vector<std::string> header_list) {
@@ -308,9 +308,8 @@ get_recombination_info(MAT::Tree &T, std::string tree_date,
         size_t recomb_num_descendants = T.get_num_leaves(recomb);
 
         // Parse dates only from Chronumental inferred dates dictionary
-        std::string_view recomb_id_view{recomb_id};
         std::string inferred_recomb_date =
-            std::string{node_to_inferred_date.at(recomb_id_view)};
+            std::string{node_to_inferred_date.at(recomb_id)};
         int space_index = inferred_recomb_date.find(" ", 0);
         inferred_recomb_date = inferred_recomb_date.substr(0, space_index);
 
@@ -344,7 +343,7 @@ get_recombination_info(MAT::Tree &T, std::string tree_date,
 
 void get_recombination_info_using_descendants(
     MAT::Tree &T, std::string tree_date, std::string filtered_recomb_file,
-    std::unordered_map<std::string_view, std::string_view> &descendant_to_date,
+    std::unordered_map<std::string, std::string> &descendant_to_date,
     std::ofstream &outfile, std::vector<std::string> header_list) {
 
     std::cout << "Opening results file: " << filtered_recomb_file << "\n";
@@ -405,7 +404,7 @@ void get_recombination_info_using_descendants(
         int earliest_days = 0;
         std::string earliest_descendant = "";
         for (auto node : descendants_vec) {
-            std::string_view n{node->identifier};
+            const std::string& n=node->identifier;
             if (descendant_to_date[n].size() != 10) {
                 continue;
             }
@@ -485,7 +484,7 @@ void chron_id_mapping(MAT::Tree &T,
 //  Extract two columns from a TSV file to act as dictionary,
 //  one as key, the other as value
 void tsv_to_dict(std::string tsv_file,
-                 std::unordered_map<std::string_view, std::string_view> &map,
+                 std::unordered_map<std::string, std::string> &map,
                  int key_col, int val_col, bool header) {
     text_parser file_handle(tsv_file);
 
@@ -498,7 +497,7 @@ void tsv_to_dict(std::string tsv_file,
     for (; !file_handle.done(); file_handle.next_line()) {
         std::string_view key = file_handle.get_value(key_col);
         std::string_view value = file_handle.get_value(val_col);
-        map.insert({key, value});
+        map.insert({std::string(key),std::string(value)});
     }
 }
 

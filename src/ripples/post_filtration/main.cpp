@@ -105,7 +105,7 @@ int main(int argc, char **argv) {
                   << "\n";
 
         // Load inferred dates for internal nodes from Chronumental output
-        std::unordered_map<std::string_view, std::string_view>
+        std::unordered_map<std::string, std::string>
             node_to_inferred_date;
         node_to_inferred_date.reserve(num_leaves);
 
@@ -139,7 +139,7 @@ int main(int argc, char **argv) {
                   << "\n";
 
         // Load MAT metadata into dictionary to get dates for descendants
-        std::unordered_map<std::string_view, std::string_view>
+        std::unordered_map<std::string, std::string>
             descendant_to_date;
         descendant_to_date.reserve(num_leaves);
         tsv_to_dict(metadata_file, descendant_to_date, 0, 2, true);
