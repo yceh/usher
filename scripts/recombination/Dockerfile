@@ -57,8 +57,8 @@ RUN wget https://raw.githubusercontent.com/ucscGenomeBrowser/kent/master/src/uti
 RUN chmod +x /usr/bin/tawk
 
 WORKDIR /HOME
-
-RUN git clone https://github.com/yatisht/usher.git
+ARG BUILDDATE
+RUN git clone https://github.com/yatisht/usher.git && echo "BUILDDATE"> builddate
 WORKDIR usher
 
 RUN ./install/installUbuntu.sh 

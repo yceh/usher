@@ -2,49 +2,32 @@ import sys
 import string
 import argparse
 from collections import Counter
+from multiprocessing.connection import Client
 
-recombination_file_name = "filtering/data/combinedCatOnlyBestWithPVals.txt"
-sampleinfo_file_name = "filtering/data/sampleInfo.txt"
-relevent_sites_file_name = "filtering/data/allRelevantNodesInfSites.txt"
-
-F = open(recombination_file_name, 'r')
-lines = F.readlines()
-F.close()
-
-labels = lines[0].split('\t')
-for i in range(len(labels)):
-    labels[i] = labels[i].strip()
-
-del lines[0]
-
-parsimony_change = []
-
-for i in range(len(lines)):
-	lines[i] = lines[i].split('\t')
-	
-	parsimony_change.append(int(lines[i][10]) - int(lines[i][11]))
-
-lines_sorted_by_parsimony_change = [x for _, x in sorted(zip(parsimony_change, lines) , reverse=True)]
+recombination_file_sock = "filtering/data/combinedCatOnlyBestWithPVals.sock"
+sampleinfo_file_sock = "filtering/data/sampleInfo.sock"
+relevent_sites_file_sock = "filtering/data/allRelevantNodesInfSites.sock"
 
 index_to_check = int(sys.argv[1])
 
+cur_line=None
+labels=None
+with Client(recombination_file_sock, family='AF_UNIX') as conn:
+    labels=conn.recv()
+    conn.send(index_to_check)
+    cur_line=conn.recv()
 
-recomb_id   = int(lines_sorted_by_parsimony_change[index_to_check][0])
-donor_id    = int(lines_sorted_by_parsimony_change[index_to_check][3])
-acceptor_id = int(lines_sorted_by_parsimony_change[index_to_check][6])
+
+recomb_id   = int(cur_line[0])
+donor_id    = int(cur_line[3])
+acceptor_id = int(cur_line[6])
 
 #breakpoints
-break1_1 = int(lines_sorted_by_parsimony_change[index_to_check][1].split(',')[0][1:])
-break1_2 = int(lines_sorted_by_parsimony_change[index_to_check][1].split(',')[1][:-1])
-break2_1 = int(lines_sorted_by_parsimony_change[index_to_check][2].split(',')[0][1:])
-break2_2 = int(lines_sorted_by_parsimony_change[index_to_check][2].split(',')[1][:-1])
+break1_1 = int(cur_line[1].split(',')[0][1:])
+break1_2 = int(cur_line[1].split(',')[1][:-1])
+break2_1 = int(cur_line[2].split(',')[0][1:])
+break2_2 = int(cur_line[2].split(',')[1][:-1])
 
-
-samplefile = open(sampleinfo_file_name, 'r')
-samplelines = samplefile.readlines()
-samplefile.close()
-
-del samplelines[0]
 
 recomb_sample = ""
 donor_sample = ""
@@ -58,40 +41,18 @@ recomb_mutations = []
 donor_mutations = []
 acceptor_mutations = []
 
-
-for i in range(len(samplelines)):
-    samplelines[i] = samplelines[i].split('\t')
-
-    samples = samplelines[i][1].split(',')
-
-
-    if int(samplelines[i][0]) == recomb_id:
-        recomb_sample = samples[0]
-        recomb_samples = samples[:10]
-        recomb_mutations = samplelines[i][2].split(',')
-
-    if int(samplelines[i][0]) == donor_id:
-        donor_sample = samples[0]
-        donor_samples = samples[:10]
-        donor_mutations = samplelines[i][2].split(',')
-
-    if int(samplelines[i][0]) == acceptor_id:
-        acceptor_sample = samples[0]
-        acceptor_samples = samples[:10]
-        acceptor_mutations = samplelines[i][2].split(',')
-
-
-inf_file = open(relevent_sites_file_name, 'r')
-inf_lines = inf_file.readlines()
-inf_file.close()
+with Client(sampleinfo_file_sock, family='AF_UNIX') as conn:
+    conn.send(recomb_id)
+    (recomb_samples,recomb_mutations)=conn.recv()
+    conn.send(donor_id)
+    (donor_sample,donor_mutations)=conn.recv()
+    conn.send(acceptor_id)
+    (acceptor_sample,acceptor_mutations)=conn.recv()
 
 mutagens = []
-
-for line in inf_lines:
-    line = line.split('\t')
-    if int(line[0]) == recomb_id and int(line[1]) == donor_id and int(line[2]) == acceptor_id:
-        mutagens = line[7].split(',')
-        break
+with Client(relevent_sites_file_sock, family='AF_UNIX') as conn:
+    conn.send((recomb_id,donor_id,acceptor_id))
+    mutagens=conn.recv()
 
 
 mutagens = [int(x) for x in mutagens]
@@ -417,11 +378,11 @@ if len(mutagens) > 0:
 
 nearest_weirdness = [50] * len(mutations)
 
-#region 1 is before breakpoint 1
-#region 2 is within breakpoint 1 interval
-#region 3 is after breakpoint 1, before breakpoint 2
-#region 4 is within breakpoint 1 interval
-#region 5 is after breakpoint 2
+#-region 1 is before breakpoint 1
+#-region 2 is within breakpoint 1 interval
+#-region 3 is after breakpoint 1, before breakpoint 2
+#-region 4 is within breakpoint 1 interval
+#-region 5 is after breakpoint 2
 
 acptr_matches_in_region_1 = 0
 donor_matches_in_region_1 = 0
@@ -667,7 +628,7 @@ for j in range(len(acceptor_samples)):
 print()
 
 for j in range(len(labels)):
-	print(labels[j], lines_sorted_by_parsimony_change[index_to_check][j])
+	print(labels[j], cur_line[j])
 
 
 
@@ -944,15 +905,15 @@ too_many_mutations_near_indel, weird_mutations, mutations_on_indels,
 suspicious_mutation_clump, most_mutations_in_20, site_of_most_mutations, most_clumps_in, indel_near_clump_size,
 informative_sites_clump, most_informative_sites_in_20, informative_clump_site,
 INDEL_in_wrong_place,
-lines_sorted_by_parsimony_change[index_to_check][1],
-lines_sorted_by_parsimony_change[index_to_check][2],
-lines_sorted_by_parsimony_change[index_to_check][9],
-lines_sorted_by_parsimony_change[index_to_check][10],
-lines_sorted_by_parsimony_change[index_to_check][11],
-lines_sorted_by_parsimony_change[index_to_check][12],
-lines_sorted_by_parsimony_change[index_to_check][13],
-#lines_sorted_by_parsimony_change[index_to_check][14],
-#lines_sorted_by_parsimony_change[index_to_check][15],
+cur_line[1],
+cur_line[2],
+cur_line[9],
+cur_line[10],
+cur_line[11],
+cur_line[12],
+cur_line[13],
+#cur_line[14],
+#cur_line[15],
 index_to_check, '\n']
 
 report_str = '\t'.join([str(x) for x in to_report])
