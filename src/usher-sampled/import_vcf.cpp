@@ -253,6 +253,15 @@ static void add_mutation(long output_idx, const MAT::Mutation &mut_template,
             mutations_out[mut_template.get_position()].push_back(std::make_pair(-output_idx, mut_nuc));
     }
 }
+static int parse_digit(FILE* fh,int& read){
+    int acc=0;
+    read=fgetc(fh);
+    while (isdigit(read)) {
+        acc=acc*10+(read-'0');
+        read=fgetc(fh);
+    }
+    return acc;
+}
 struct line_parser {
     Sampled_Tree_Mutations_t &header;
     mut_container_t& mutations_out;
@@ -279,7 +288,7 @@ struct line_parser {
                 pos = pos * 10 + (*line_in - '0');
                 line_in++;
             }
-            if (pos <= 0) {
+            if (pos < 0) {
                 raise(SIGTRAP);
             }
             line_in++;
@@ -415,11 +424,18 @@ static void map_names(MAT::Tree &tree,std::vector<Sample_Muts> &sample_mutations
         sample_mutations[idx].sample_idx=tree.map_samp_name_only(sample_names[idx]);
     }
 }
+static void add_sample_to_place(MAT::Tree &tree, std::string& name,
+std::vector<long>& sample_idx,size_t field_idx, std::vector<Sample_Muts> &sample_mutations){
+    auto new_samp_idx=tree.map_samp_name_only(name);
+    sample_idx[field_idx] = sample_mutations.size();
+    sample_mutations.emplace_back();
+    sample_mutations.back().sample_idx=new_samp_idx;
+}
 template <typename infile_t>
 static void process(infile_t &fd, std::vector<Sample_Muts> &sample_mutations,
                     MAT::Tree &tree,mut_container_t& mutations_out,
                     bool override,std::vector<std::string>& fields,
-                    const std::unordered_set<std::string>& samples_in_condensed_nodes) {
+                    const std::unordered_set<std::string>& samples_in_condensed_nodes, std::string duplicate_prefix) {
     read_header(fd, fields);
     tbb::flow::graph input_graph;
     Sampled_Tree_Mutations_t tree_mutations;
@@ -435,18 +451,23 @@ static void process(infile_t &fd, std::vector<Sample_Muts> &sample_mutations,
         }
         auto node=tree.get_node(fields[field_idx]);
         if (node != nullptr) {
-            if (override) {
+            if(duplicate_prefix!=""){
+                std::string name=duplicate_prefix+fields[field_idx];
+                add_sample_to_place(tree, name, sample_idx, field_idx, sample_mutations);
+            }else if (override) {
                 sample_idx[field_idx]=-node->node_id;
             } else {
                 fprintf(stderr, "WARNING: Sample %s already in the tree! Ignoring.\n\n", fields[field_idx].c_str());
             }
         } else if (samples_in_condensed_nodes.find(fields[field_idx])!=samples_in_condensed_nodes.end()) {
-            fprintf(stderr, "WARNING: Sample %s already in the tree! (condensed node) Ignoring.\n\n", fields[field_idx].c_str());
+            if(duplicate_prefix!=""){
+                std::string name=duplicate_prefix+fields[field_idx];
+                add_sample_to_place(tree, name, sample_idx, field_idx, sample_mutations);
+            }else{
+                fprintf(stderr, "WARNING: Sample %s already in the tree! (condensed node) Ignoring.\n\n", fields[field_idx].c_str());
+            }
         } else {
-            auto new_samp_idx=tree.map_samp_name_only(fields[field_idx]);
-            sample_idx[field_idx] = sample_mutations.size();
-            sample_mutations.emplace_back();
-            sample_mutations.back().sample_idx=new_samp_idx;
+            add_sample_to_place(tree, fields[field_idx], sample_idx, field_idx, sample_mutations);
         }
     }
     mutations_out.resize(MAT::Mutation::refs.size());
@@ -460,8 +481,8 @@ static void process(infile_t &fd, std::vector<Sample_Muts> &sample_mutations,
     size_t single_line_size;
     parser.try_put(try_get_first_line(fd, single_line_size));
     size_t first_approx_size =
-        std::min(CHUNK_SIZ, ONE_GB / single_line_size) - 2;
-    read_size = std::max(ONE_MB/single_line_size, first_approx_size * single_line_size);
+        std::min(CHUNK_SIZ, ONE_GB / single_line_size);
+    read_size = first_approx_size * single_line_size;
     alloc_size = (first_approx_size + 2) * single_line_size;
     tbb::concurrent_bounded_queue<std::pair<char *, uint8_t *>> queue;
     tbb::flow::source_node<line_start_later> line(input_graph,
@@ -493,7 +514,7 @@ static void process(infile_t &fd, std::vector<Sample_Muts> &sample_mutations,
 void Sample_Input(const char *name, std::vector<Sample_Muts> &sample_mutations,
                   MAT::Tree &tree,mut_container_t& position_wise_out
                   ,bool override,std::vector<std::string>& fields
-                  ,const std::unordered_set<std::string>& samples_in_condensed_nodes) {
+                  ,const std::unordered_set<std::string>& samples_in_condensed_nodes,std::string duplicate_prefix) {
     assigned_count = 0;
     std::atomic<bool> done(false);
     std::mutex done_mutex;
@@ -502,13 +523,126 @@ void Sample_Input(const char *name, std::vector<Sample_Muts> &sample_mutations,
     std::string vcf_filename(name);
     if (vcf_filename.find(".gz\0") != std::string::npos) {
         gzip_input_source fd(name);
-        process(fd, sample_mutations, tree,position_wise_out,override,fields,samples_in_condensed_nodes);
+        process(fd, sample_mutations, tree,position_wise_out,override,fields,samples_in_condensed_nodes,duplicate_prefix);
         delete fd.state;
     } else {
         raw_input_source fd(name);
-        process(fd, sample_mutations, tree,position_wise_out,override,fields,samples_in_condensed_nodes);
+        process(fd, sample_mutations, tree,position_wise_out,override,fields,samples_in_condensed_nodes,duplicate_prefix);
     }
     done = true;
     progress_bar_cv.notify_all();
     progress_meter.join();
+}
+static void load_reference(std::string fasta_fname){
+    auto fh=fopen(fasta_fname.c_str(), "r");
+    char* seq_name=nullptr;
+    size_t seq_len=0;
+    auto nchar=getline(&seq_name, &seq_len, fh);
+    MAT::Mutation::chromosomes.emplace_back(seq_name+1,seq_name+nchar-1);
+    MAT::Mutation::chromosome_map.emplace(MAT::Mutation::chromosomes[0],0);
+    free(seq_name);
+    auto read=fgetc(fh);
+    MAT::Mutation::refs.push_back(0);
+    while (read!=EOF) {
+        if (read!='\n') {
+            auto parsed_nuc=MAT::get_nuc_id(read);
+            if (parsed_nuc==0xf) {
+                parsed_nuc=0;
+            }
+            MAT::Mutation::refs.push_back(parsed_nuc);
+        }
+        read=fgetc(fh);
+    }
+}
+typedef std::vector<mutated_t> mut_container_t;
+void load_diff_for_usher(
+    const char *input_path,std::vector<Sample_Muts>& all_samples,
+    mut_container_t& position_wise_out, MAT::Tree &tree, const std::string& fasta_fname,
+    std::vector<std::string> & samples) {
+    load_reference(fasta_fname);
+    position_wise_out.resize(MAT::Mutation::refs.size());
+    auto fh=fopen(input_path, "r");
+    int read;
+    int line_count=0;
+    bool do_add=true;
+    int samp_idx;
+    while (true) {
+        read=fgetc(fh);
+        if (read==EOF) {
+            return;
+        }
+        if (read=='>') {
+            std::string sample_name;
+            for(read=fgetc(fh);read!='\n';read=fgetc(fh)){
+            if (read==EOF) {
+                fprintf(stderr, "%d: unexpected EOF READ %s sofar\n",line_count, sample_name.c_str());
+                raise(SIGTRAP);
+            }
+            sample_name.push_back(read);
+            }
+            samples.push_back(sample_name);
+            auto node=tree.get_node(sample_name);
+            if (node != nullptr) {
+                fprintf(stderr, "WARNING: Sample %s already in the tree! Ignoring.\n\n", sample_name.c_str());
+                samp_idx=node->node_id;
+                do_add=false;
+            } else {
+                samp_idx=tree.map_samp_name_only(sample_name);
+                do_add=true;
+                all_samples.emplace_back();
+                all_samples.back().sample_idx=samp_idx;
+            }
+        }else {
+            
+            auto parsed_nuc=MAT::get_nuc_id(read);
+            if (parsed_nuc==0xf&&read!='n'&&read!='N'&&read!='-') {
+                fprintf(stderr, "at line %d\n",line_count);
+                raise(SIGTRAP);
+            }
+            read=fgetc(fh);
+            if(read!='\t'){
+                fprintf(stderr, "%d:Expect tab, got %d:%c\n",line_count,read,read);
+                raise(SIGTRAP);
+            }
+            auto pos=parse_digit(fh,read);
+            if (parsed_nuc==0xf) {
+                int len;
+                if(read!='\t'){
+                    if(read=='\n'){
+                        len=1;
+                    }else{           
+                    fprintf(stderr, "%d:n nuc, Expect tab, got %d:%c\n",line_count,read,read);
+                    raise(SIGTRAP);
+                    }
+                }else {
+                    len=parse_digit(fh, read);
+                }
+                if(do_add){
+                        all_samples.back().muts.emplace_back(pos,0,0xf);
+                        all_samples.back().muts.back().range=len-1;
+                    }
+                    for (int n_counter=0; n_counter<len; n_counter++) {
+                        position_wise_out[pos+n_counter].emplace_back(samp_idx,0xf);
+                    }
+            }else {
+                if(do_add){
+                    all_samples.back().muts.emplace_back(pos,0,parsed_nuc,MAT::Mutation::refs[pos]);
+                }
+                position_wise_out[pos].emplace_back(samp_idx,parsed_nuc);
+            }
+            if (read!='\n'&&read!=EOF) {
+                std::string temp;
+                while (read!='\n'&&read!=EOF) {
+                    temp.push_back(read);
+                    read=fgetc(fh);
+                }
+                fprintf(stderr, "%d:Got unrecongnized trialing :%s\n",line_count,temp.c_str());
+            }
+            if (read==EOF) {
+                return;
+            }
+        }
+
+        line_count++;
+    }
 }

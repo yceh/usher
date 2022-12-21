@@ -391,17 +391,39 @@ std::unordered_map<std::string, float> get_assignments(MAT::Tree* T, std::unorde
     return assignments;
 }
 
-std::pair<boost::gregorian::date,boost::gregorian::date> get_nearest_date(MAT::Tree* T, MAT::Node* n, std::set<std::string>* in_samples, std::unordered_map<std::string, std::string> datemeta) {
+std::pair<boost::gregorian::date,boost::gregorian::date> daterange_from_list(std::vector<std::string> sample_list, std::unordered_map<std::string, std::string> datemeta) {
     boost::gregorian::date earliest = boost::gregorian::day_clock::universal_day();
     boost::gregorian::date latest = boost::gregorian::date(1500,1,1);
-    for (auto l: T->get_leaves_ids(n->identifier)) {
-        if (in_samples->find(l) != in_samples->end()) {
-            if (datemeta.find(l) != datemeta.end()) {
+    for (auto l: sample_list) {
+        if (datemeta.find(l) != datemeta.end()) {
+            boost::gregorian::date leafdate;
+            try {
+                leafdate = boost::gregorian::from_string(datemeta.find(l)->second);
+            } catch (boost::bad_lexical_cast &e) {
+                fprintf(stderr, "WARNING: Malformed date %s provided in date file for sample %s; ignoring sample date\n", datemeta.find(l)->second.c_str(), l.c_str());
+                continue;
+            }
+            if (leafdate < earliest) {
+                earliest = leafdate;
+            }
+            if (leafdate > latest) {
+                latest = leafdate;
+            }
+        } else {
+            std::string datend = l.substr(l.rfind("|")+1, std::string::npos);
+            if (datend.size() > 0) {
                 boost::gregorian::date leafdate;
                 try {
-                    leafdate = boost::gregorian::from_string(datemeta.find(l)->second);
+                    if (datend.size() == 8) {
+                        leafdate = boost::gregorian::from_string("20"+datend);
+                    } else if (datend.size() == 10) {
+                        leafdate = boost::gregorian::from_string(datend);
+                    } else {
+                        continue;
+                    }
                 } catch (boost::bad_lexical_cast &e) {
-                    fprintf(stderr, "WARNING: Malformed date %s provided in date file for sample %s; ignoring sample date\n", datemeta.find(l)->second.c_str(), l.c_str());
+                    continue;
+                } catch (const std::out_of_range& oor) {
                     continue;
                 }
                 if (leafdate < earliest) {
@@ -410,30 +432,6 @@ std::pair<boost::gregorian::date,boost::gregorian::date> get_nearest_date(MAT::T
                 if (leafdate > latest) {
                     latest = leafdate;
                 }
-            } else {
-                std::string datend = l.substr(l.rfind("|")+1, std::string::npos);
-                if (datend.size() > 0) {
-                    boost::gregorian::date leafdate;
-                    try {
-                        if (datend.size() == 8) {
-                            leafdate = boost::gregorian::from_string("20"+datend);
-                        } else if (datend.size() == 10) {
-                            leafdate = boost::gregorian::from_string(datend);
-                        } else {
-                            continue;
-                        }
-                    } catch (boost::bad_lexical_cast &e) {
-                        continue;
-                    } catch (const std::out_of_range& oor) {
-                        continue;
-                    }
-                    if (leafdate < earliest) {
-                        earliest = leafdate;
-                    }
-                    if (leafdate > latest) {
-                        latest = leafdate;
-                    }
-                }
             }
         }
     }
@@ -441,6 +439,16 @@ std::pair<boost::gregorian::date,boost::gregorian::date> get_nearest_date(MAT::T
         return std::pair<boost::gregorian::date,boost::gregorian::date> ();
     }
     return std::pair<boost::gregorian::date,boost::gregorian::date> (earliest,latest);
+}
+std::pair<boost::gregorian::date,boost::gregorian::date> get_nearest_date(MAT::Tree* T, MAT::Node* n, std::set<std::string>* in_samples, std::unordered_map<std::string, std::string> datemeta) {
+    std::vector<std::string> lnames;
+    for (auto l: T->get_leaves_ids(n->identifier)) {
+        if (in_samples->find(l) != in_samples->end()) {
+            lnames.push_back(l);
+        }
+    }
+    std::pair<boost::gregorian::date,boost::gregorian::date> datepair = daterange_from_list(lnames, datemeta);
+    return datepair;
 }
 
 std::vector<std::string> find_introductions(MAT::Tree* T, std::unordered_map<std::string, std::vector<std::string>> sample_regions, bool add_info, std::string clade_output, float min_origin_confidence, std::string bycluster, std::string dump_assignments, bool eval_uncertainty, std::string earliest_date = "1500/1/1", std::string latest_date = "1500/1/1", std::unordered_map<std::string, std::string> datemeta = {}, float minimum_reporting = 0.05, size_t num_to_report = 1, size_t look_ahead = 0, size_t minimum_gap = 0) {
@@ -621,11 +629,9 @@ std::vector<std::string> find_introductions(MAT::Tree* T, std::unordered_map<std
                     //can't assign region of origin if introduction point is root (no information about parent)
                     if ((region_assignments.size() > 1) & (!a->is_root())) {
                         auto assign_search = region_ins.find(a->identifier);
-                        // float highest_conf = 0.0;
-                        // std::string highest_conf_origin = "indeterminate";
                         //instead of immediately reporting each that pass a high threshold,
                         //collect the set of all that pass a low threshold, sort by confidence, and store only the top Z scores and associated strings.
-                        //std::vector<std::pair<float,std::string>> oriscores;
+                        //use of the greater comparator means that the top() element is the smallest value. 
                         std::priority_queue<std::pair<float,std::string>, std::vector<std::pair<float,std::string>>, std::greater<std::pair<float,std::string>>> oriscores;
                         if (assign_search != region_ins.end()) {
                             size_t count = assign_search->second.size();
@@ -640,30 +646,39 @@ std::vector<std::string> find_introductions(MAT::Tree* T, std::unordered_map<std
                                 }
                                 std::pair<float,std::string> dpair = std::make_pair(region_cons.find(a->identifier)->second[i], assign_search->second[i]);
                                 oriscores.push(dpair);
-                                if (oriscores.size() > count) {
-                                    //drop the lowest member if we're over count.
+                                if ((oriscores.size() > count) && (oriscores.top().first < 1)) {
+                                    //drop the lowest member if we're over count and if the lowest member is less than 1
+                                    //this means we can generate vectors longer than the indicated count of values of 1.
                                     oriscores.pop();
                                 }
                             }
-                            while (!oriscores.empty()) {
-                                auto osp = oriscores.top();
-                                if (origins.size() == 0) {
-                                    origins += osp.second;
-                                    origins_cons << osp.first;
-                                } else {
-                                    origins += "," + osp.second;
-                                    origins_cons << "," << osp.first;
+                            //if we ended up storing a bunch of tied values, more than the count to report, just set it to be indeterminate
+                            //this means that a cluster labeled as indeterminate can have its composition of potential origins revealed 
+                            //by increasing the number of potential origins to report.
+                            if ((oriscores.size() > count) && (oriscores.top().first == 1)) {
+                                origins = "indeterminate: " + std::to_string(oriscores.size()) + " potential origins.";
+                                origins_cons << 1.0;
+                            } else {
+                                while (!oriscores.empty()) {
+                                    auto osp = oriscores.top();
+                                    if (origins.size() == 0) {
+                                        origins += osp.second;
+                                        origins_cons << osp.first;
+                                    } else {
+                                        origins += "," + osp.second;
+                                        origins_cons << "," << osp.first;
+                                    }
+                                    oriscores.pop();
                                 }
-                                oriscores.pop();
                             }
                         } else {
-                            origins = "indeterminate";
+                            origins = "indeterminate: no information.";
                             origins_cons << 0.0;
                         }
                     }
                     if (origins.size() == 0) {
                         //if we didn't find anything which has the pre-introduction node at 1, we don't know where it came from
-                        origins = "indeterminate";
+                        origins = "indeterminate: no regions with support";
                         origins_cons << 0.0;
                     }
                     //collect additional information if requested.
@@ -794,8 +809,10 @@ std::vector<std::string> find_introductions(MAT::Tree* T, std::unordered_map<std
         std::unordered_map<std::string, std::string> date_tracker;
         for (auto cs: clusters) {
             std::string ldatestr;
-            MAT::Node* nn = T->get_node(cs.first);
-            std::pair<boost::gregorian::date,boost::gregorian::date> ldates = get_nearest_date(T, nn, &sampleset, datemeta);
+            std::vector<std::string> cluster_samples;
+            for (auto s : cs.second)
+                cluster_samples.push_back(s.first);
+            std::pair<boost::gregorian::date,boost::gregorian::date> ldates = daterange_from_list(cluster_samples, datemeta);
             boost::gregorian::days diff(0);
             if ((ldates.first.is_not_a_date()) || (ldates.second.is_not_a_date())) {
                 fprintf(stderr, "WARNING: Cluster %s has no valid dates included among samples\n", cs.first.c_str());

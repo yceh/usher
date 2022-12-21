@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <vector>
+#include "version.hpp"
 #ifdef __linux
 #include <sys/prctl.h>
 #endif
@@ -170,8 +171,20 @@ static int leader_thread(
     std::vector<mutated_t> position_wise_out_dup;
     std::vector<std::string> samples;
     const std::unordered_set<std::string> samples_in_condensed_nodes;
-    Sample_Input(options.vcf_filename.c_str(),samples_to_place,tree,position_wise_out,options.override_mutations,samples,samples_in_condensed_nodes);
+    if(options.diff_file_name!=""&&options.reference_file_name!=""){
+        load_diff_for_usher(options.diff_file_name.c_str(), samples_to_place, position_wise_out,tree,options.reference_file_name,samples);
+    }else {
+        if(options.vcf_filename==""){
+            fprintf(stderr, "Expect either VCF file or MAPLE file\n");
+            exit(EXIT_FAILURE);
+        }
+        Sample_Input(options.vcf_filename.c_str(),samples_to_place,tree,position_wise_out,options.override_mutations,samples,samples_in_condensed_nodes,options.duplicate_prefix);
+    }
     samples_to_place.resize(std::min(samples_to_place.size(),options.first_n_samples));
+    if(samples_to_place.empty()){
+        fprintf(stderr,"No samples to place\n");
+        exit(EXIT_FAILURE);
+    }
     size_t sample_start_idx=samples_to_place[0].sample_idx;
     size_t sample_end_idx=samples_to_place.back().sample_idx+1;
     fprintf(stderr, "Sample start idx %zu, end index %zu\n",sample_start_idx,sample_end_idx);
@@ -261,9 +274,10 @@ static int leader_thread(
         return 0;
     }
     while (true) {
-        fprintf(stderr, "Parsimony score %zu\n",tree.get_parsimony_score());
         clean_tree_for_placement(tree);
-        prep_tree(tree);
+        auto tree_size=prep_tree(tree);
+        switch_to_serial_threshold=std::max((int)(tree_size*batch_size_per_process/(2*num_threads)),10);
+        fprintf(stderr, "switch to serial search when there are less than %d descendants\n", switch_to_serial_threshold);
         if (process_count>1) {
             fprintf(stderr, "Main sending tree\n");
             tree.MPI_send_tree();
@@ -297,6 +311,7 @@ static int leader_thread(
             break;
         }
     }
+    fclose(placement_stats_file);
     fprintf(stderr, "Main finised place\n");
     auto dfs=tree.depth_first_expansion();
     clean_up_leaf(dfs);
@@ -304,7 +319,6 @@ static int leader_thread(
         tree, options.out_options, 0, samples_clade, sample_start_idx, sample_end_idx, low_confidence_samples,position_wise_out);
     auto duration=std::chrono::steady_clock::now()-start_time;
     fprintf(stderr, "Took %ld msec\n",std::chrono::duration_cast<std::chrono::milliseconds>(duration).count());
-    MPI_Finalize();
     return 0;
 }
 void wait_debug();
@@ -327,7 +341,7 @@ int main(int argc, char **argv) {
     bool ignored_options;
     //std::vector<int> gdb_pids;
     desc.add_options()
-    ("vcf,v", po::value<std::string>(&options.vcf_filename)->required(),"Input VCF file (in uncompressed or gzip-compressed .gz format) [REQUIRED]")
+    ("vcf,v", po::value<std::string>(&options.vcf_filename),"Input VCF file (in uncompressed or gzip-compressed .gz format) [REQUIRED]")
     ("tree,t", po::value<std::string>(&options.tree_in)->default_value(""), "Input tree file")
     ("outdir,d", po::value<std::string>(&options.out_options.outdir)->default_value("."), "Output directory to dump output and log files [DEFAULT uses current directory]")
     ("load-mutation-annotated-tree,i",po::value<std::string>(&options.protobuf_in)->default_value(""),"Load mutation-annotated tree object")
@@ -361,6 +375,8 @@ int main(int argc, char **argv) {
      "Do not add new samples to the tree")
     ("detailed-clades,D", po::bool_switch(&options.out_options.detailed_clades), \
      "In clades.txt, write a histogram of annotated clades and counts across all equally parsimonious placements")
+    ("diff",po::value<std::string>(&options.diff_file_name),"diff file from MAPLE, to be used with reference sequence")
+    ("ref",po::value<std::string>(&options.reference_file_name),"reference sequence, only needed for MAPLE")
     ("threads,T",po::value<uint32_t>(&num_threads)->default_value(num_cores),num_threads_message.c_str())
     ("reduce-back-mutation,B",po::bool_switch(&options.out_options.redo_FS_Min_Back_Mutations)->default_value(false),
      "Reassign states of internal nodes to reduce back mutation count.")
@@ -381,20 +397,25 @@ int main(int argc, char **argv) {
     ("parsimony_threshold",po::value(&options.parsimony_threshold)->default_value(100000),
      "Optimize after the parsimony score increase by this amount")
     ("first_n_samples",po::value(&options.first_n_samples)->default_value(SIZE_MAX),"[TESTING ONLY] Only place first n samples")
+    ("no-ignore-prefix",po::value<std::string>(&options.duplicate_prefix),"prefix samples already in the tree to force placement")
     //("gdb_pid,g",po::value(&gdb_pids)->multitoken(),"gdb pids for attaching")
     ;
     po::variables_map vm;
     //wait_debug();
+    bool have_error=false;
     try {
         po::store(po::command_line_parser(argc, argv).options(desc).run(), vm);
         po::notify(vm);
     } catch(std::exception &e) {
         // Return with error code 1 unless the user specifies help
+        have_error=true;
+    }
+    if (have_error||(options.vcf_filename==""&&(options.diff_file_name==""||options.reference_file_name==""))) {
         if (this_rank==0) {
             if (vm.count("version")) {
-                std::cout << "UShER " << std::endl;
+                std::cout << "UShER (v" << PROJECT_VERSION << ")" << std::endl;
             } else {
-                std::cerr << "UShER " << std::endl;
+                std::cout << "UShER (v" << PROJECT_VERSION << ")" << std::endl;
                 std::cerr << desc << std::endl;
             }
         }
@@ -408,6 +429,7 @@ int main(int argc, char **argv) {
     if (options.initial_optimization_radius<=0) {
         options.parsimony_threshold=INT_MAX;
     }
+    num_threads=std::max(2u,num_threads);
     options.desired_optimization_msec=optimiation_minutes*60000;
     fprintf(stderr, "Num threads %d\n",num_threads);
 #ifdef __linux
