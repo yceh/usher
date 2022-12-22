@@ -1,3 +1,4 @@
+#include <csignal>
 #include <cstddef>
 #include <cstdio>
 #include <cstdlib>
@@ -8,6 +9,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <tbb/blocked_range.h>
+#include <tbb/parallel_for.h>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
@@ -29,10 +31,10 @@ struct loader_out {
     std::unordered_map<std::string, Seq_Descriptor> pos_map;
 };
 std::fstream open_fifo(char* path){
-    unlink(path);
+/*    unlink(path);
     if(mkfifo(path, S_IRWXU|S_IRWXG|S_IRWXO)){
         perror("Error making fifo");
-    }
+    }*/
     std::fstream f(path,std::ios::in);
     if (!f) {
         perror("error open");
@@ -51,7 +53,7 @@ void load_file(std::string command, int out_fd, Each_Input_T* offsets_out){
         if (line[0]=='>') {
             std::string seq_name(line+1);
             seq_name.pop_back();
-            auto cur_offset=ftell(input_f);
+            auto cur_offset=ftell(out_f);
             if(!offsets_out->empty()){
                 offsets_out->back().second.set_length(cur_offset);
             }
@@ -74,7 +76,7 @@ Loader_Out_T loader(char* input_fifo_path,char* rename_fifo_path ){
     std::vector<int> temp_fds;
     std::vector<Each_Input_T*> loaded;
     std::vector<std::thread> loading_threads;
-    while (true) {
+    while (input_fifo) {
         std::string temp;        
         std::getline(input_fifo,temp);
         if (temp=="END") {
@@ -88,7 +90,7 @@ Loader_Out_T loader(char* input_fifo_path,char* rename_fifo_path ){
         loading_threads.emplace_back(load_file,temp,temp_fds.back(),single_loaded_out);
     }
     std::unordered_map<std::string, std::string> rename_map;
-    while (true) {
+    while (rename_fifo) {
         std::string temp;        
         std::getline(rename_fifo,temp);
         if (temp=="END") {
@@ -114,11 +116,12 @@ Loader_Out_T loader(char* input_fifo_path,char* rename_fifo_path ){
     return loader_out;
 }
 typedef std::vector<std::vector<std::string>> To_Write_T;
-To_Write_T gather_write(char* fifo_path){
+void gather_write(char* fifo_path,To_Write_T& out){
     auto extract_fifo_file=open_fifo(fifo_path);
     std::string temp;        
     std::getline(extract_fifo_file,temp);
-    To_Write_T out(std::atoi(temp.c_str()));  
+
+    out.resize(std::atoi(temp.c_str()));  
     while (true) {
         std::getline(extract_fifo_file,temp);
         if (temp=="END") {
@@ -129,27 +132,38 @@ To_Write_T gather_write(char* fifo_path){
         auto name=temp.substr(iter+1,temp.size()-1-(iter+1));
         out[fid].push_back(name);
     }
-    return out;
 }
-void copy_file_range(off64_t in_offset,off64_t in_end){
+void append_file_range(off64_t in_offset,off64_t in_end,int in_fd, int out_fd){
         off_t out_offset=lseek(out_fd, 0, SEEK_CUR);
-        while (in_offset<stat_data.st_size) {
-            if(copy_file_range(in_fd, &offset,out_fd,&out_offset, stat_data.st_size-offset,0)==-1){
+        while (in_offset<in_end) {
+            if(copy_file_range(in_fd, &in_offset,out_fd,&out_offset, in_end-in_offset,0)==-1){
                 perror("sendfile");
-                exit(1);
+                raise(SIGTRAP);
             }
         }
+        lseek(out_fd, 0, SEEK_END);
 }
-void write_file(int idx, const std::vector<std::string>& sequence_to_write,char* output_format_string,int ref_fd,size_t ref_size){
+void write_file(int idx, const std::vector<std::string>& sequence_to_write,char* output_format_string,int ref_fd,size_t ref_size,const Loader_Out_T& seq_idx){
     char out_buf_name[BUFSIZ];
     snprintf(out_buf_name, BUFSIZ, output_format_string,idx);
-    auto out_fd=open(out_buf_name, O_WRONLY|O_CREAT|O_TRUNC);
+    auto out_fd=open(out_buf_name, O_WRONLY|O_CREAT|O_TRUNC,S_IRUSR|S_IWUSR|S_IROTH|S_IRGRP);
+    append_file_range(0, ref_size, ref_fd, out_fd);
     for (const auto& name : sequence_to_write) {
-        
+        auto iter=seq_idx.find(name);
+        if (iter==seq_idx.end()) {
+            fprintf(stderr, "%s not found\n", name.c_str());
+            continue;
+        }
+        auto to_write=">"+name+"\n";
+        write(out_fd, to_write.c_str(), to_write.size());
+        append_file_range(iter->second.start, iter->second.end, iter->second.fd, out_fd);
     }
+    close(out_fd);
 }
 int main(int argc, char** argv){
-    // input fifo path, rename fifo path, seq_name_output, extract fifo path, output file name template, reference file path
+    // 1:input fifo path, 2:rename fifo path, 3:seq_name_output, 4:extract fifo path, 5:output file name template, 6:reference file path
+    To_Write_T to_write;
+    std::thread gather_write_thread(gather_write,argv[4],std::ref(to_write));
     auto loader_out=loader(argv[1], argv[2]);
     {
         std::fstream seq_name_f(argv[3]);
@@ -157,36 +171,18 @@ int main(int argc, char** argv){
             seq_name_f<<ele.first<<"\n";
         }
     }
-    auto to_write=gather_write(argv[3]);
-
-
-
-    auto out_fd=open(argv[1], O_CREAT|O_WRONLY|O_TRUNC);
-    if (out_fd==-1) {
-        perror("out fail");
-        exit(EXIT_FAILURE);
-    }
-    auto in_fd=open(argv[2],O_RDONLY);
-    if (in_fd==-1) {
-        perror("in fail");
+    auto ref_fd=open(argv[6],O_RDONLY);
+    if (ref_fd==-1) {
+        perror("failed to open reference file");
         exit(EXIT_FAILURE);
     }
     struct stat stat_data;
-    fstat(in_fd,&stat_data);
-    auto times=atoi(argv[3]);
-    std::string interperse=argv[4];
-    interperse+="\n";
-    for (int i=0; i<times; i++) {
-        write(out_fd,interperse.data(),interperse.size());
-        off_t offset=0;
-        off_t out_offset=lseek(out_fd, 0, SEEK_CUR);
-        while (offset<stat_data.st_size) {
-            if(copy_file_range(in_fd, &offset,out_fd,&out_offset, stat_data.st_size-offset,0)==-1){
-                perror("sendfile");
-                exit(1);
-            }
+    fstat(ref_fd,&stat_data);
+    gather_write_thread.join();
+    auto ref_size=stat_data.st_size;
+    tbb::parallel_for(tbb::blocked_range<size_t>(0,to_write.size()),[ref_size,&loader_out,&to_write,argv,ref_fd](tbb::blocked_range<size_t>range){
+        for (int idx=range.begin(); idx<range.end(); idx++) {
+            write_file(idx, to_write[idx], argv[5],ref_fd ,ref_size, loader_out);
         }
-        lseek(out_fd, 0, SEEK_END);
-    }
-    
+    });
 }

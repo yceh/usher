@@ -499,6 +499,12 @@ else()
         )
     endif()
 endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_executable(fasta_server
+        src/fasta_server.cpp
+    )
+    TARGET_LINK_LIBRARIES(fasta_server PRIVATE stdc++ pthread ${TBB_IMPORTED_TARGETS}) 
+endif()
 
 if(SAVE_PROFILE)
     if(DEBUG)
