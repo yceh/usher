@@ -9,7 +9,7 @@ startDir=$PWD
 cores=`grep -c ^processor /proc/cpuinfo`
 
 # Check correct number of args passed
-if [ "$#" -lt 3 ]; then
+if [ "$#" -ne 3 ]; then
     echo "ERROR: Incorrect number of arguments passed."
 fi
 
@@ -22,12 +22,7 @@ cp filtering/data/allDescendants.fa filtering/fastas/extractedSeqs.fa
 
 mkdir -p filtering/fastas/OrderedRecombs
 mkdir -p filtering/fastas/AlignedRecombs
-if [ "$#" -eq 4 ]; then
-python3 filtering/analyzerecomb.py -a extract_fifo seq_name_out
-else
 python3 filtering/analyzerecomb.py -a
-fi
-tail --pid $4 -f /dev/null
 # Align raw sequences using mafft
 cd filtering/fastas/OrderedRecombs
 ls . |  parallel -j $cores "mafft --auto {} > ../AlignedRecombs/{} "

@@ -62,39 +62,12 @@ start_ripples = timeit.default_timer()
 
 # Run ripples on current GCP instance
 cmd = parse_ripples_command(version, mat, start_range, end_range, num_descendants)
-ripple_proc=subprocess.Popen(cmd)
-fasta_server_proc=None
-subprocess.run(["rm","-rf","input_fifo","rename_fifo","extract_fifo"])
-os.mkfifo("input_fifo")
-os.mkfifo("rename_fifo")
-os.mkfifo("extract_fifo")
-fasta_server_working=False
-try:
-  fasta_server_proc=subprocess.Popen(["fasta_server",
-  "input_fifo",
-  "rename_fifo",
-  "seq_name_out",
-  "extract_fifo",
-  "filtering/fastas/OrderedRecombs/%d.fa",
-  reference,
-  ])
-  with open("input_fifo","w") as input_fh:
-    input_fh.write("gsutil cp gs://%s/genbank.fa.xz - | xzcat \n" % bucket_id)
-    input_fh.write("gsutil cp gs://%s/cog_all.fasta.xz - | xzcat \n" % bucket_id)
-    input_fh.write("gsutil cp gs://%s/gisaid_fullNames_$TREE_DATE.fa.xz - | xzcat \n" % bucket_id, date)
-    input_fh.write("END\n")
-  fasta_server_working=True
-except FileNotFoundError:
-  fasta_server_working=False
-
-ripple_proc.wait()
+ripple_proc=subprocess.run(cmd)
 # Stop timer for RIPPLES
 stop_ripples = timeit.default_timer()
 # Start runtime for filtration pipeline
 start_filtration = timeit.default_timer()
 filtration = ["./run_ripples_filtration.sh", mat, date, reference, results, out, bucket_id]
-if(fasta_server_working and (fasta_server_proc.poll() is not None)):
-  filtration.append(str(fasta_server_proc.pid))
 # Run putative recombinants through post-processing filtration pipeline
 subprocess.run(filtration)
 
