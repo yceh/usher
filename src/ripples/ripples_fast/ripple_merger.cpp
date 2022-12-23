@@ -2,6 +2,7 @@
 #include "src/mutation_annotated_tree.hpp"
 #include <algorithm>
 #include <cassert>
+#include <csignal>
 #include <stdio.h>
 #include <vector>
 #ifdef __SSE2__
@@ -261,6 +262,11 @@ static void find_pairs(
                     }
                 }
 
+                for (auto anc : T.rsearch(a.node->identifier, true)) {
+                    for (auto mut : anc->mutations) {
+                        acceptor.add_mutation(mut);
+                    }
+                }
                 for (auto mut : donor.sample_mutations) {
                     if ((mut.position > start_range_low) &&
                             (mut.position <= start_range_high)) {
@@ -313,6 +319,62 @@ static void find_pairs(
                             end_range_high = mut.position;
                         }
                     }
+                }
+                if (start_range_high==start_range_low) {
+                    //raise(SIGTRAP);
+                }
+                auto recomb_start_high_idx=i;
+                bool reached=false;
+                for (const auto& mut : acceptor.sample_mutations) {
+                    if(!reached){
+                        if(mut.position>=start_range_high){
+                            reached=true;
+                        }
+                    }
+                    if(reached) {
+                        if (mut.position<pruned_sample_mutations[recomb_start_high_idx].position) {
+                            start_range_high=mut.position;
+                            break;
+                        }else if (mut.position==pruned_sample_mutations[recomb_start_high_idx].position) {
+                            if(mut.mut_nuc==pruned_sample_mutations[recomb_start_high_idx].mut_nuc){
+                                recomb_start_high_idx++;
+                            }else {
+                                start_range_high=mut.position;
+                                break;
+                            }
+                        }else {
+                            start_range_high=pruned_sample_mutations[recomb_start_high_idx].position;
+                            break;
+                        }
+                    }
+                }
+                int last_different_position=start_range_low;
+                auto recomb_iter=pruned_sample_mutations.begin();
+                for (auto const& donor_mut : donor.sample_mutations) {
+                    while (recomb_iter!=pruned_sample_mutations.end()&&recomb_iter->position<donor_mut.position) {
+                        if (recomb_iter->position>start_range_low) {
+                            break;
+                        }
+                        last_different_position=recomb_iter->position;
+                        recomb_iter++;
+                    }
+                    if (recomb_iter->position==donor_mut.position) {
+                        if (recomb_iter->position>start_range_low) {
+                            break;
+                        }
+                        if (recomb_iter->mut_nuc!=donor_mut.mut_nuc) {
+                            last_different_position=recomb_iter->position;
+                        }
+                    }else {
+                        if(donor_mut.position>start_range_low){
+                            break;
+                        }
+                        last_different_position=donor_mut.position;
+                    }
+                }
+                start_range_low=last_different_position;
+                if (start_range_high==start_range_low) {
+                    //raise(SIGTRAP);
                 }
 
                 // tbb_lock.lock();
