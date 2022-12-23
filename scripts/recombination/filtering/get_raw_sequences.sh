@@ -57,7 +57,6 @@ do
                 d) TREE_DATE=${OPTARG} ;;
                 i) INPUT=${OPTARG} ;;
                 o) OUTPUT=${OPTARG} ;;
-                p) SERVER_PID=${OPTARG} ;;
                 *) echo "Invalid option: -$flag" ;;
         esac
 done

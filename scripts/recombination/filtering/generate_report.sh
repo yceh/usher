@@ -16,7 +16,7 @@ fi
 mkdir -p filtering/fastas
 cp $reference filtering/fastas/reference.fa
 
-chmod +x filtering/get_raw_sequences.sh $4
+chmod +x filtering/get_raw_sequences.sh
 ./filtering/get_raw_sequences.sh -b $bucket_id -d $date -i filtering/data -o filtering/data
 cp filtering/data/allDescendants.fa filtering/fastas/extractedSeqs.fa
 
