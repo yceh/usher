@@ -104,6 +104,22 @@ for i in range(len(samplelines)):
 
 all_samples = open(all_fasta_file_name, 'r')
 sample_lines = all_samples.readlines()
+if(len(sys.argv)==4):
+	with open(sys.argv[2],"w") as out_fd:
+		out_fd.write("%d\n" % how_many_to_see)
+		with open(sys.argv[3],"r") as sample_fd:
+			for possible_name in sample_fd:
+				possible_name.strip()
+				ori_name=possible_name
+				if possible_name.rfind('/') > possible_name.rfind('|'):
+					possible_name = possible_name[:-8]
+				if possible_name in samples_to_get:
+					in_relevent_sample = True
+					for j in range(how_many_to_see):
+						if possible_name in samples_by_example[j]:
+							out_fd.write("%d\t%s\n" % j, ori_name)
+		out_fd.write("END")
+	exit(0)
 
 reference = open(reference_file_name, 'r')
 reference_lines = reference.readlines()

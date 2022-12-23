@@ -78,6 +78,11 @@ try:
   "filtering/fastas/OrderedRecombs/%d.fa",
   reference,
   ])
+  with open("input_fifo","w") as input_fh:
+    input_fh.write("gsutil cp gs://%s/genbank.fa.xz - | xzcat \n" % bucket_id)
+    input_fh.write("gsutil cp gs://%s/cog_all.fasta.xz - | xzcat \n" % bucket_id)
+    input_fh.write("gsutil cp gs://%s/gisaid_fullNames_$TREE_DATE.fa.xz - | xzcat \n" % bucket_id, date)
+    input_fh.write("END\n")
   fasta_server_working=True
 except FileNotFoundError:
   fasta_server_working=False

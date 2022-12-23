@@ -8,7 +8,7 @@ INPUT=""           # -i
 OUTPUT=""          # -o
 BUCKET_ID=""       # -b
 DESCENDENTS=""
-
+SERVER_PID=""
 help() {
     echo
     echo "-b, --bucket_id                          GCP bucket_id name to copy the files from"
@@ -58,6 +58,7 @@ do
                 d) TREE_DATE=${OPTARG} ;;
                 i) INPUT=${OPTARG} ;;
                 o) OUTPUT=${OPTARG} ;;
+                p) SERVER_PID=${OPTARG} ;;
                 *) echo "Invalid option: -$flag" ;;
         esac
 done
@@ -80,15 +81,22 @@ echo "Output directory: $OUTPUT"
 
 # Copy all sequence files needed into local directory
 # NCBI sequences
+if [[ $SERVER_PID == "" ]]
+then 
 gsutil cp gs://$BUCKET_ID/genbank.fa.xz $INPUT
 
 # CogUK sequences
 gsutil cp gs://$BUCKET_ID/cog_all.fasta.xz $INPUT
 
+fi
+
 # GISAID sequences, protobuf and metadata
 gsutil cp gs://$BUCKET_ID/gisaidAndPublic.$TREE_DATE.masked.pb $INPUT
 gsutil cp gs://$BUCKET_ID/gisaidAndPublic.$TREE_DATE.metadata.tsv.gz $INPUT
+if [[ $SERVER_PID == "" ]]
+then 
 gsutil cp gs://$BUCKET_ID/gisaid_fullNames_$TREE_DATE.fa.xz $INPUT
+fi
 gsutil cp gs://$BUCKET_ID/metadata_batch_$TREE_DATE.tsv.gz $INPUT
 
 
@@ -125,6 +133,8 @@ zcat $INPUT/metadata_batch_$TREE_DATE.tsv.gz \
 > $OUTPUT/allDescendants.epiToFastaName
 wc -l $OUTPUT/allDescendants.epiToFastaName
 
+if [[ $SERVER_PID == "" ]]
+then
 faSomeRecords <(xzcat $INPUT/gisaid_fullNames_$TREE_DATE.fa.xz) \
     <(cut -f 2 $OUTPUT/allDescendants.epiToFastaName) $OUTPUT/allDescendants.gisaid.fa
 
@@ -140,14 +150,21 @@ faSomeRecords <(xzcat $INPUT/cog_all.fasta.xz) \
 
 fastaSeqCount $OUTPUT/allDescendants.cog.fa
 
+fi
 join -t$'\t' <(sort $OUTPUT/allDescendants.epiToFastaName) <(sort $OUTPUT/allDescendants.epiToName) \
 | cut -f 2,3 > $OUTPUT/allDescendants.rename
 
 cat $OUTPUT/allDescendants.gbAccToName $OUTPUT/allDescendants.cogToName >> $OUTPUT/allDescendants.rename
 
+if [[ $SERVER_PID == "" ]]
+then
 # Concatenate and rename fasta
 cat $OUTPUT/allDescendants.gisaid.fa $OUTPUT/allDescendants.genbank.fa $OUTPUT/allDescendants.cog.fa \
 | faRenameRecords stdin $OUTPUT/allDescendants.rename $OUTPUT/allDescendants.fa
 
 fastaNames $OUTPUT/allDescendants.fa | sort > $OUTPUT/namesFound
 comm -23 $OUTPUT/allDescendants.uniq.txt $OUTPUT/namesFound
+else
+cat $OUTPUT/allDescendants.rename > rename_fifo
+echo 'END' > rename_fifo
+fi
