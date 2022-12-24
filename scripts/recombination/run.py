@@ -126,7 +126,7 @@ auth()
 # Set ripples job config options
 #docker_image = "mrkylesmith/ripples_pipeline:latest"
 #TODO: Using dev image at the moment
-docker_image = "mrkylesmith/ripples_pipeline_dev:latest"
+docker_image = "chye/ripples_pipeline_dev:latest"
 boot_disk_size = str(config["boot_disk_size"])
 instances = config["instances"] # Number of remote machines to parallelize ripples across 
 machine_type = config["machine_type"]
