@@ -324,7 +324,7 @@ subprocess.run(cmd)
 node_to_extract_file = "{}to_extract".format(local_results)
 cmd="sort -u <(cut -f 1 {0} |tail -n +2 ) <(cut -f 2 {0} |tail -n +2 ) <(cut -f 3 {0} |tail -n +2 ) > {1}".format(recomb_output_file,node_to_extract_file)
 subprocess.run(["bash","-c",cmd])
-subprocess.run(["matUtils","extract","-i",mat,"-s",node_to_extract_file,"-v","{}trios.vcf".format(local_results)])
+subprocess.run(["matUtils","extract","-i",mat,"-s",node_to_extract_file,"-v","{}/trios.vcf".format(local_results)])
 # Copy over final results file to GCP storage bucket
 subprocess.run(["gsutil", "cp", recomb_output_file, results])
 

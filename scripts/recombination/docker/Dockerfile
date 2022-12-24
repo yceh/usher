@@ -59,7 +59,8 @@ RUN apt-get install -y parallel
 WORKDIR /HOME
 ARG REPO_URL
 ARG BRANCH
-RUN git clone $REPO_URL
+ARG BUILD_DATE
+RUN git clone $REPO_URL && echo "$BUILD_DATE" > build_date
 WORKDIR usher
 RUN git checkout $BRANCH
 RUN ./install/installUbuntu.sh 
