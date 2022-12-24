@@ -6,15 +6,20 @@ with Listener(sampleinfo_sock_name, family='AF_UNIX',backlog=int(sys.argv[1])) a
 	sample_info={}
 
 	with open(sampleinfo_file_name, 'r') as F:
+		F.readline()
 		for line in F:
-			fields=F.split(',')
+			fields=line.split('\t')
 			samples=fields[1].split(',')
 			mutations=fields[2].split(',')
-			sample_info[fields[0]]=(samples[:10],mutations)
+			sample_info[int(fields[0])]=(samples[:10],mutations)
 	while (True):
 		with listener.accept() as conn:
 			while (True):
 				idx=conn.recv()
 				if(idx=="END"):
 					break
-				conn.send(sample_info[idx])
+				try:
+					conn.send(sample_info[idx])
+				except KeyError:
+					print("sample_info_server %s requested not found" % idx)
+					conn.send(([],[]))

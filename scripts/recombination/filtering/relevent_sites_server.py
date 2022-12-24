@@ -8,8 +8,12 @@ with Listener(relevent_sites_file_sock, family='AF_UNIX',backlog=int(sys.argv[1]
 	with open(relevent_sites_file_name, 'r') as F:
 		for line in F:
 			line = line.split('\t')
-			revelent_sites[(line[0],line[1],line[2])]=line[7].split(',')
+			revelent_sites[(int(line[0]),int(line[1]),int(line[2]))]=line[7].split(',')
 	while (True):
 		with listener.accept() as conn:
 			idx=conn.recv()
-			conn.send(revelent_sites[idx])
+			try:
+				conn.send(revelent_sites[idx])
+			except KeyError:
+				print ( "relevent sites"+str(idx)+"not found")
+				conn.send([])

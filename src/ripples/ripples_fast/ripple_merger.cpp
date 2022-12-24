@@ -241,14 +241,14 @@ static void find_pairs(
                         (orig_parsimony >= d.parsimony + a.parsimony +
                                                parsimony_improvement)
                                                */) {
-                int start_range_high = pruned_sample_mutations[i].position;
+                int start_range_high = pruned_sample_mutations[i].position+1;
                 int start_range_low =
                     (i >= 1) ? pruned_sample_mutations[i - 1].position : 0;
 
                 // int end_range_high = pruned_sample_mutations[j].position;
                 int end_range_high = 1e9;
                 int end_range_low =
-                    (j >= 1) ? pruned_sample_mutations[j - 1].position : 0;
+                    (j >= 1) ? pruned_sample_mutations[j - 1].position-1 : 0;
                 Pruned_Sample donor;
                 donor.sample_mutations.clear();
                 Pruned_Sample acceptor;
@@ -262,11 +262,11 @@ static void find_pairs(
                     }
                 }
 
-                for (auto anc : T.rsearch(a.node->identifier, true)) {
+                /*for (auto anc : T.rsearch(a.node->identifier, true)) {
                     for (auto mut : anc->mutations) {
                         acceptor.add_mutation(mut);
                     }
-                }
+                }*/
                 for (auto mut : donor.sample_mutations) {
                     if ((mut.position > start_range_low) &&
                             (mut.position <= start_range_high)) {
@@ -320,7 +320,7 @@ static void find_pairs(
                         }
                     }
                 }
-                if (start_range_high==start_range_low) {
+                /*if (start_range_high==start_range_low) {
                     //raise(SIGTRAP);
                 }
                 auto recomb_start_high_idx=i;
@@ -375,7 +375,7 @@ static void find_pairs(
                 start_range_low=last_different_position;
                 if (start_range_high==start_range_low) {
                     //raise(SIGTRAP);
-                }
+                }*/
 
                 // tbb_lock.lock();
                 valid_pairs.push_back(

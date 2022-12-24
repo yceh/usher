@@ -45,10 +45,10 @@ with Client(sampleinfo_file_sock, family='AF_UNIX') as conn:
     conn.send(recomb_id)
     (recomb_samples,recomb_mutations)=conn.recv()
     conn.send(donor_id)
-    (donor_sample,donor_mutations)=conn.recv()
+    (donor_samples,donor_mutations)=conn.recv()
     conn.send(acceptor_id)
-    (acceptor_sample,acceptor_mutations)=conn.recv()
-
+    (acceptor_samples,acceptor_mutations)=conn.recv()
+    conn.send('END')
 mutagens = []
 with Client(relevent_sites_file_sock, family='AF_UNIX') as conn:
     conn.send((recomb_id,donor_id,acceptor_id))
