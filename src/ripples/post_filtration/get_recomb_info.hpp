@@ -14,6 +14,7 @@ struct Recombinant {
     std::string donor_node_id;
     std::string acceptor_node_id;
     std::string informative_seq; // eg) "AAAAAAAAAAABBB"
+    std::string informative_position; // eg) "1,2,..."
     std::string mnk_3seq_values; // eg) "(M,N,K)"
     std::string p_value_3seq;
     std::string descendants;

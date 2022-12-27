@@ -49,20 +49,21 @@ RUN rsync -aP rsync://hgdownload.soe.ucsc.edu/genome/admin/exe/linux.x86_64/faSo
 RUN chmod +x /usr/bin/faSomeRecords
 
 # Install faRenameRecords
-RUN wget https://hgwdev.gi.ucsc.edu/~angie/faRenameRecords /usr/bin
-RUN chmod +x /usr/bin/faRenameRecords
+RUN wget https://hgwdev.gi.ucsc.edu/~angie/faRenameRecords && mv faRenameRecords /usr/bin && chmod +x /usr/bin/faRenameRecords
 
 # Install tawk
-RUN wget https://raw.githubusercontent.com/ucscGenomeBrowser/kent/master/src/utils/tawk /usr/bin
-RUN chmod +x /usr/bin/tawk
+RUN wget https://raw.githubusercontent.com/ucscGenomeBrowser/kent/master/src/utils/tawk && mv tawk /usr/bin && chmod +x /usr/bin/tawk
+
+RUN apt-get install -y parallel
 
 WORKDIR /HOME
-
-RUN git clone https://github.com/yatisht/usher.git
+ARG REPO_URL
+ARG BRANCH
+ARG BUILD_DATE
+RUN git clone $REPO_URL && echo "$BUILD_DATE" > build_date
 WORKDIR usher
-
+RUN git checkout $BRANCH
 RUN ./install/installUbuntu.sh 
-RUN apt-get install -y parallel
 
 # Install 3seq
 RUN cd scripts/recombination/filtering && \ 

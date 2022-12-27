@@ -126,7 +126,7 @@ auth()
 # Set ripples job config options
 #docker_image = "mrkylesmith/ripples_pipeline:latest"
 #TODO: Using dev image at the moment
-docker_image = "mrkylesmith/ripples_pipeline_dev:latest"
+docker_image = "yecheng/ripples_pipeline_dev:latest"
 boot_disk_size = str(config["boot_disk_size"])
 instances = config["instances"] # Number of remote machines to parallelize ripples across 
 machine_type = config["machine_type"]
@@ -324,7 +324,7 @@ subprocess.run(cmd)
 node_to_extract_file = "{}to_extract".format(local_results)
 cmd="sort -u <(cut -f 1 {0} |tail -n +2 ) <(cut -f 2 {0} |tail -n +2 ) <(cut -f 3 {0} |tail -n +2 ) > {1}".format(recomb_output_file,node_to_extract_file)
 subprocess.run(["bash","-c",cmd])
-subprocess.run(["matUtils","extract","-i",mat,"-s",node_to_extract_file,"-v","{}trios.vcf".format(local_results)])
+subprocess.run(["matUtils","extract","-i",mat,"-s",node_to_extract_file,"-v","{}/trios.vcf".format(local_results)])
 # Copy over final results file to GCP storage bucket
 subprocess.run(["gsutil", "cp", recomb_output_file, results])
 

@@ -146,6 +146,7 @@ if(DEFINED Protobuf_PATH)
         src/matOptimize/optimize_tree.cpp
         src/matOptimize/import_vcf_fast.cpp
         src/matOptimize/condense.cpp
+        src/matOptimize/optimize_inner_loop.cpp
         src/matOptimize/VCF_load_tree.cpp
         src/matOptimize/main_load_tree.cpp
         src/matOptimize/main_helper.cpp
@@ -339,6 +340,7 @@ else()
         src/matOptimize/mutation_annotated_tree_load_store.cpp
         src/matOptimize/mutation_annotated_tree_nuc_util.cpp
         src/matOptimize/Mutation_Collection.cpp
+        src/matOptimize/reassign_states.cpp
         src/matOptimize/check_samples.cpp
         src/matOptimize/optimize_tree.cpp
         src/matOptimize/condense.cpp
@@ -402,6 +404,8 @@ else()
         src/matOptimize/main_helper.cpp
         src/matOptimize/Mutation_Collection.cpp
         src/matOptimize/Fitch_Sankoff.cpp
+        src/matOptimize/optimize_inner_loop.cpp
+        src/matOptimize/reassign_states.cpp
         src/matOptimize/check_samples.cpp
         #src/matOptimize/priority_conflict_resolver_cross_only.cpp
         src/matOptimize/priority_conflict_resolver.cpp
@@ -482,6 +486,7 @@ else()
             src/matOptimize/mutation_annotated_tree_load_store.cpp
             src/matOptimize/mutation_annotated_tree_nuc_util.cpp
             src/matOptimize/Mutation_Collection.cpp
+            src/matOptimize/reassign_states.cpp
             src/matOptimize/check_samples.cpp
             src/matOptimize/optimize_tree.cpp
             src/matOptimize/condense.cpp
@@ -537,8 +542,8 @@ TARGET_LINK_LIBRARIES(ripples-fast PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPO
 
 if(USHER_SERVER)
     TARGET_COMPILE_OPTIONS(usher_server PRIVATE -DTBB_SUPPRESS_DEPRECATED_MESSAGES)
-    TARGET_LINK_LIBRARIES(usher_server PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
-    TARGET_LINK_LIBRARIES(usher-sampled-server PRIVATE stdc++  ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB  ${MPI_CXX_LIBRARIES} ${MPI_CXX_LINK_FLAGS} ${ISAL_LIB} ) # OpenMP::OpenMP_CXX)
+    TARGET_LINK_LIBRARIES(usher_server PRIVATE stdc++ ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB) # OpenMP::OpenMP_CXX)
+    TARGET_LINK_LIBRARIES(usher-sampled-server PRIVATE stdc++ ${CMAKE_DL_LIBS} ${Boost_LIBRARIES} ${TBB_IMPORTED_TARGETS} ${Protobuf_LIBRARIES} ZLIB::ZLIB  ${MPI_CXX_LIBRARIES} ${MPI_CXX_LINK_FLAGS} ${ISAL_LIB} ) # OpenMP::OpenMP_CXX)
     install(TARGETS usher matUtils matOptimize ripples usher_server DESTINATION bin)
 else()
     install(TARGETS usher matUtils matOptimize ripples DESTINATION bin)

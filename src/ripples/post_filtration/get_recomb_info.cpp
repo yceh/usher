@@ -2,6 +2,7 @@
 #include <boost/algorithm/string/join.hpp>
 #include <ctime>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <time.h>
 #include <tuple>
@@ -212,7 +213,8 @@ void write_recombination_list(
         outfile << rr.recomb_rank << "\t";
 
         outfile << r.original_parsimony << "\t";
-        outfile << r.parsimony_improvement << "\n";
+        outfile << r.parsimony_improvement << "\t";
+        outfile << r.informative_position << "\n";
     }
     outfile.close();
     samples_outfile.close();
@@ -283,7 +285,8 @@ get_recombination_info(MAT::Tree &T, std::string tree_date,
         // Get informative site from filtration results file,
         // which is at column 16
         r.informative_seq = std::string{results.get_value(16)};
-
+        // Get informative site positions from filtration results file,
+        r.informative_position=std::string{results.get_value(15)};
         // Get 3SEQ M, N, K values from filtration results file
         std::string mnk_values = "(";
         mnk_values += std::string{results.get_value(17)} + ", ";

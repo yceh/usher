@@ -62,11 +62,9 @@ start_ripples = timeit.default_timer()
 
 # Run ripples on current GCP instance
 cmd = parse_ripples_command(version, mat, start_range, end_range, num_descendants)
-subprocess.run(cmd)
-
+ripple_proc=subprocess.run(cmd,stderr=subprocess.DEVNULL)
 # Stop timer for RIPPLES
 stop_ripples = timeit.default_timer()
-
 # Start runtime for filtration pipeline
 start_filtration = timeit.default_timer()
 filtration = ["./run_ripples_filtration.sh", mat, date, reference, results, out, bucket_id]
@@ -85,3 +83,4 @@ runtime_log.write("Total runtime for nodes {}:{}{}  (Hours:Minutes:Seconds){}".f
 runtime_log.close()
 
 subprocess.run(["gsutil", "cp", "runtime_{}.log".format(out), "gs://{}/{}".format(bucket_id, logging)])
+subprocess.run(["gsutil", "cp", "check_mutant_log", "gs://{}/{}".format(bucket_id, logging)])
