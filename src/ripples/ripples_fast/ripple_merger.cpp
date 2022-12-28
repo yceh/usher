@@ -4,6 +4,8 @@
 #include <cassert>
 #include <csignal>
 #include <stdio.h>
+#include <string>
+#include <unordered_map>
 #include <vector>
 #ifdef __SSE2__
 #include <emmintrin.h>
@@ -210,13 +212,121 @@ static void threshold_parsimony(const Ripples_Mapper_Output_Interface &out_ifc,
         }
     }
 }
+enum Node_Type{DONOR,ACCEPTOR,RECOMB};
+struct Merging_Nuc_Type{
+    int position;
+    char nuc;
+    char ref_nuc;
+    Node_Type node_Type;
+};
+typedef std::unordered_map<int, Merging_Nuc_Type> Mut_Map_T;
+static void gather_mutations(Mut_Map_T& mutations, Node_Type node_type,const MAT::Node* node){
+    if(!node){
+        return;
+    }
+    for (const auto& mut : node->mutations) {
+        mutations.emplace(mut.position,Merging_Nuc_Type{mut.position,mut.mut_nuc,mut.ref_nuc,node_type});
+    }
+    gather_mutations(mutations, node_type, node->parent);
+}
+static void fill_muts(std::vector<Merging_Nuc_Type>& to_fill, const Mut_Map_T& filler){
+    for (const auto& mut : filler) {
+        if (mut.second.nuc!=mut.second.ref_nuc) {
+            to_fill.push_back(mut.second);
+        }
+    }
+}
+std::vector<Merging_Nuc_Type> merge_nuc(const MAT::Node* acceptor,const MAT::Node* donor, const std::vector<MAT::Mutation>& recomb_muts){
+    Mut_Map_T accptor_muts;
+    gather_mutations(accptor_muts, ACCEPTOR, acceptor);
+    Mut_Map_T donor_muts;
+    gather_mutations(donor_muts, DONOR, donor);
+    std::vector<Merging_Nuc_Type> ret_val;
+    ret_val.reserve(accptor_muts.size()+donor_muts.size()+recomb_muts.size());
+    for (const auto& mut : recomb_muts) {
+        if (mut.mut_nuc!=mut.ref_nuc) {
+            ret_val.push_back(Merging_Nuc_Type{mut.position,mut.mut_nuc,mut.ref_nuc,RECOMB});
+        }
+    }
+    fill_muts(ret_val, accptor_muts);
+    fill_muts(ret_val, donor_muts);
+    std::sort(ret_val.begin(),ret_val.end(),[](const Merging_Nuc_Type& l,const Merging_Nuc_Type& r){
+        return l.position<r.position;
+    });
 
-static void find_pairs(
-    const std::vector<Recomb_Node> &donor_nodes,
-    const std::vector<Recomb_Node> &acceptor_nodes,
-    const std::vector<MAT::Mutation> &pruned_sample_mutations, int i, int j,
-    int parsimony_threshold,
-    const MAT::Tree &T, tbb::concurrent_vector<Recomb_Interval> &valid_pairs) {
+}
+enum Interval_State{
+                    ACCEPTOR_LOW,
+                    DONOR_LOW,
+                    DONOR_HIGH,
+                    ACCEPTOR_HIGH
+                };
+bool set_interval(int start_pos, int end_pos, Interval_State &state,
+               int &start_range_low, int &start_range_high, int &end_range_low,
+               int &end_range_high, const char* nuc,
+               int prev_pos,std::string& diagnoistic_string) {
+    Interval_State used_state;
+    bool stop=false;
+    bool triggered=false;
+    switch (state) {
+    case ACCEPTOR_LOW:
+        used_state=ACCEPTOR_LOW;
+        if (prev_pos > start_pos) {
+            state = start_range_low ? DONOR_LOW : DONOR_HIGH;
+        } else {
+            if (nuc[RECOMB] == nuc[ACCEPTOR] && nuc[RECOMB] != nuc[DONOR]) {
+                triggered=true;
+                start_range_low = prev_pos;
+            }
+            break;
+        }
+    case DONOR_LOW:
+        used_state=DONOR_LOW;
+        if (nuc[RECOMB] != nuc[ACCEPTOR] && nuc[RECOMB] == nuc[DONOR]) {
+            triggered=true;
+            start_range_high = prev_pos;
+            state = DONOR_HIGH;
+        }
+        break;
+    case DONOR_HIGH:
+        used_state=DONOR_HIGH;
+        if (prev_pos > end_pos) {
+            state = ACCEPTOR_HIGH;
+        } else {
+            if (nuc[RECOMB] != nuc[ACCEPTOR] && nuc[RECOMB] == nuc[DONOR]) {
+                triggered=true;
+                end_range_low = prev_pos;
+            }
+            break;
+        }
+    case ACCEPTOR_HIGH:
+        used_state=ACCEPTOR_HIGH;
+        if (nuc[RECOMB] == nuc[ACCEPTOR] && nuc[RECOMB] != nuc[DONOR]) {
+            triggered=true;
+            end_range_high = prev_pos;
+            stop=true;
+        }
+    }
+    diagnoistic_string+=(std::to_string(prev_pos)+"\t"
+        +MAT::get_nuc(nuc[DONOR])+"\t"
+        +MAT::get_nuc(nuc[ACCEPTOR])+"\t"
+        +MAT::get_nuc(nuc[RECOMB])+"\t"
+        );
+    switch (used_state) {
+        case ACCEPTOR_LOW: diagnoistic_string+="ACCEPTOR_LOW";
+        case DONOR_LOW: diagnoistic_string+="DONOR_LOW";
+        case DONOR_HIGH: diagnoistic_string+="DONOR_HIGH";
+        case ACCEPTOR_HIGH: diagnoistic_string+="ACCEPTOR_HIGH";
+    }
+    diagnoistic_string=diagnoistic_string+"\t"+((prev_pos==start_pos)?"*":"-")+"\t"+((prev_pos==end_pos)?"*":"-")+"\t"+(triggered?"*":"-")+"\n";
+    return stop;
+}
+static void
+find_pairs(const std::vector<Recomb_Node> &donor_nodes,
+           const std::vector<Recomb_Node> &acceptor_nodes,
+           const std::vector<MAT::Mutation> &pruned_sample_mutations, int i,
+           int j, int parsimony_threshold, const MAT::Tree &T,
+           tbb::concurrent_vector<Recomb_Interval> &valid_pairs) {
     bool has_printed = false;
 
     for (auto d : donor_nodes) {
@@ -235,149 +345,42 @@ static void find_pairs(
             if (parsimony_threshold < d.parsimony + a.parsimony) {
                 break;
             }
-            if ((d.node != a.node)
-                    /*&& (d.name != nid_to_consider) &&
-                        (a.name != nid_to_consider) &&
-                        (orig_parsimony >= d.parsimony + a.parsimony +
-                                               parsimony_improvement)
-                                               */) {
-                int start_range_high = pruned_sample_mutations[i].position+1;
-                int start_range_low =
-                    (i >= 1) ? pruned_sample_mutations[i - 1].position : 0;
-
-                // int end_range_high = pruned_sample_mutations[j].position;
+            if (d.node != a.node) {
+                std::string diagnoistic_string="donor:"+d.node->identifier+", acceptor:"+a.node->identifier+
+                    "\nposition\tdonor\tacceptor\trecomb\tstate\ti\tj\ttriggered\n";
+                auto start_pos = pruned_sample_mutations[i].position;
+                auto end_pos = pruned_sample_mutations[j].position;
+                auto muts = merge_nuc(a.node, d.node, pruned_sample_mutations);
+                Interval_State state = ACCEPTOR_LOW;
+                int start_range_low = 0;
+                int start_range_high = 0;
+                int end_range_low = 1e9;
                 int end_range_high = 1e9;
-                int end_range_low =
-                    (j >= 1) ? pruned_sample_mutations[j - 1].position-1 : 0;
-                Pruned_Sample donor;
-                donor.sample_mutations.clear();
-                Pruned_Sample acceptor;
-                acceptor.sample_mutations.clear();
-
-                auto donor_node = d.node;
-
-                for (auto anc : T.rsearch(donor_node->identifier, true)) {
-                    for (auto mut : anc->mutations) {
-                        donor.add_mutation(mut);
+                int prev_pos = -1;
+                char nuc[] = {0, 0, 0};
+                bool stop=false;
+                for (const auto &mut : muts) {
+                    if (mut.position != prev_pos) {
+                        stop=set_interval(start_pos, end_pos, state, start_range_low,
+                                  start_range_high, end_range_low,
+                                  end_range_high, nuc, prev_pos,diagnoistic_string);
+                        for (int type_idx = 0; type_idx < 3; type_idx++) {
+                            nuc[type_idx] = mut.ref_nuc;
+                        }
+                        prev_pos=mut.position;
                     }
+                    nuc[mut.node_Type]=mut.nuc;
                 }
-
-                /*for (auto anc : T.rsearch(a.node->identifier, true)) {
-                    for (auto mut : anc->mutations) {
-                        acceptor.add_mutation(mut);
-                    }
-                }*/
-                for (auto mut : donor.sample_mutations) {
-                    if ((mut.position > start_range_low) &&
-                            (mut.position <= start_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : pruned_sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            start_range_low = mut.position;
-                        }
-                    }
-                    if ((mut.position > end_range_low) &&
-                            (mut.position <= end_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : pruned_sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            end_range_high = mut.position;
-                        }
-                    }
+                if(!stop){
+                set_interval(start_pos, end_pos, state, start_range_low,
+                                  start_range_high, end_range_low,
+                                  end_range_high, nuc, prev_pos,diagnoistic_string);
                 }
-
-                for (auto mut : pruned_sample_mutations) {
-                    if ((mut.position > start_range_low) &&
-                            (mut.position <= start_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : donor.sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            start_range_low = mut.position;
-                        }
-                    }
-                    if ((mut.position > end_range_low) &&
-                            (mut.position <= end_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : donor.sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            end_range_high = mut.position;
-                        }
-                    }
-                }
-                /*if (start_range_high==start_range_low) {
-                    //raise(SIGTRAP);
-                }
-                auto recomb_start_high_idx=i;
-                bool reached=false;
-                for (const auto& mut : acceptor.sample_mutations) {
-                    if(!reached){
-                        if(mut.position>=start_range_high){
-                            reached=true;
-                        }
-                    }
-                    if(reached) {
-                        if (mut.position<pruned_sample_mutations[recomb_start_high_idx].position) {
-                            start_range_high=mut.position;
-                            break;
-                        }else if (mut.position==pruned_sample_mutations[recomb_start_high_idx].position) {
-                            if(mut.mut_nuc==pruned_sample_mutations[recomb_start_high_idx].mut_nuc){
-                                recomb_start_high_idx++;
-                            }else {
-                                start_range_high=mut.position;
-                                break;
-                            }
-                        }else {
-                            start_range_high=pruned_sample_mutations[recomb_start_high_idx].position;
-                            break;
-                        }
-                    }
-                }
-                int last_different_position=start_range_low;
-                auto recomb_iter=pruned_sample_mutations.begin();
-                for (auto const& donor_mut : donor.sample_mutations) {
-                    while (recomb_iter!=pruned_sample_mutations.end()&&recomb_iter->position<donor_mut.position) {
-                        if (recomb_iter->position>start_range_low) {
-                            break;
-                        }
-                        last_different_position=recomb_iter->position;
-                        recomb_iter++;
-                    }
-                    if (recomb_iter->position==donor_mut.position) {
-                        if (recomb_iter->position>start_range_low) {
-                            break;
-                        }
-                        if (recomb_iter->mut_nuc!=donor_mut.mut_nuc) {
-                            last_different_position=recomb_iter->position;
-                        }
-                    }else {
-                        if(donor_mut.position>start_range_low){
-                            break;
-                        }
-                        last_different_position=donor_mut.position;
-                    }
-                }
-                start_range_low=last_different_position;
-                if (start_range_high==start_range_low) {
-                    //raise(SIGTRAP);
-                }*/
-
-                // tbb_lock.lock();
+                diagnoistic_string+=("start_range_low:"+std::to_string(start_range_low)+
+                "start_range_high:"+std::to_string(start_range_high)+
+                "end_range_low:"+std::to_string(end_range_low)+
+                "end_range_high:"+std::to_string(end_range_high)+"\n");
+                puts(diagnoistic_string.c_str());
                 valid_pairs.push_back(
                     Recomb_Interval(d, a, start_range_low, start_range_high,
                                     end_range_low, end_range_high));
