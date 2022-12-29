@@ -264,7 +264,11 @@ enum Interval_State{
 bool set_interval(int start_pos, int end_pos, Interval_State &state,
                int &start_range_low, int &start_range_high, int &end_range_low,
                int &end_range_high, const char* nuc,
-               int prev_pos,std::string& diagnoistic_string) {
+               int prev_pos
+               #ifdef DIAGNOSTICS
+               ,std::string& diagnoistic_string
+               #endif
+               ) {
     Interval_State used_state;
     bool stop=false;
     char triggered='-';
@@ -313,6 +317,7 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
             stop=true;
         }
     }
+    #ifdef DIAGNOSTICS
     diagnoistic_string+=(std::to_string(prev_pos)+"\t"
         +MAT::get_nuc(nuc[DONOR])+"\t"
         +MAT::get_nuc(nuc[ACCEPTOR])+"\t"
@@ -325,6 +330,7 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
         case ACCEPTOR_HIGH: diagnoistic_string+="ACCEPTOR_HIGH";break;
     }
     diagnoistic_string=diagnoistic_string+"\t"+((prev_pos==start_pos)?"*":"-")+"\t"+((prev_pos==end_pos)?"*":"-")+"\t"+triggered+"\n";
+    #endif
     return stop;
 }
 static void
@@ -352,8 +358,10 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                 break;
             }
             if (d.node != a.node) {
+                #ifdef DIAGNOSTICS
                 std::string diagnoistic_string="donor:"+d.node->identifier+", acceptor:"+a.node->identifier+"recomb_node:"+recomb_node->identifier+
                     "\nposition\tdonor\tacceptor\trecomb\tstate\ti\tj\ttriggered\n";
+                #endif
                 auto start_pos = pruned_sample_mutations[i].position;
                 auto end_pos = pruned_sample_mutations[j].position;
                 auto muts = merge_nuc(a.node, d.node, pruned_sample_mutations);
@@ -369,7 +377,11 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                     if (mut.position != prev_pos) {
                         stop=set_interval(start_pos, end_pos, state, start_range_low,
                                   start_range_high, end_range_low,
-                                  end_range_high, nuc, prev_pos,diagnoistic_string);
+                                  end_range_high, nuc, prev_pos
+               #ifdef DIAGNOSTICS
+                                  ,diagnoistic_string
+                                  #endif
+                                  );
                         if (stop) {
                             break;
                         }
@@ -383,7 +395,11 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                 if(!stop){
                 set_interval(start_pos, end_pos, state, start_range_low,
                                   start_range_high, end_range_low,
-                                  end_range_high, nuc, prev_pos,diagnoistic_string);
+                                  end_range_high, nuc, prev_pos
+               #ifdef DIAGNOSTICS
+                                  ,diagnoistic_string
+                #endif
+                                  );
                 }
                  if (!
                 (
@@ -391,14 +407,27 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                     start_range_high<=end_range_low&&
                     end_range_low<=end_range_high    
                 )) {
+               #ifdef DIAGNOSTICS
                     fputs(diagnoistic_string.c_str(),stderr);
+                #else
+                    fprintf(stderr, "%s\t%s\t%s\t%d\t%d\n",
+                        recomb_node->identifier.c_str(),
+                        d.node->identifier.c_str(),
+                        a.node->identifier.c_str(),
+                        start_pos,
+                        end_pos
+                    );
+                #endif
                     continue;
                 }
+                #ifdef DIAGNOSTICS
                 diagnoistic_string+=("start_range_low:"+std::to_string(start_range_low)+
                 "start_range_high:"+std::to_string(start_range_high)+
                 "end_range_low:"+std::to_string(end_range_low)+
                 "end_range_high:"+std::to_string(end_range_high)+"\n");
                 puts(diagnoistic_string.c_str());
+                #endif
+
                 valid_pairs.push_back(
                     Recomb_Interval(d, a, start_range_low, start_range_high,
                                     end_range_low, end_range_high));
