@@ -253,7 +253,7 @@ std::vector<Merging_Nuc_Type> merge_nuc(const MAT::Node* acceptor,const MAT::Nod
     std::sort(ret_val.begin(),ret_val.end(),[](const Merging_Nuc_Type& l,const Merging_Nuc_Type& r){
         return l.position<r.position;
     });
-
+    return ret_val;
 }
 enum Interval_State{
                     ACCEPTOR_LOW,
@@ -267,7 +267,7 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
                int prev_pos,std::string& diagnoistic_string) {
     Interval_State used_state;
     bool stop=false;
-    bool triggered=false;
+    char triggered='-';
     switch (state) {
     case ACCEPTOR_LOW:
         used_state=ACCEPTOR_LOW;
@@ -275,16 +275,22 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
             state = start_range_low ? DONOR_LOW : DONOR_HIGH;
         } else {
             if (nuc[RECOMB] == nuc[ACCEPTOR] && nuc[RECOMB] != nuc[DONOR]) {
-                triggered=true;
+                triggered='A';
                 start_range_low = prev_pos;
+            }
+            if (nuc[RECOMB] != nuc[ACCEPTOR] && nuc[RECOMB] == nuc[DONOR]) {
+                triggered='D';
+                start_range_high = prev_pos;
+                end_range_low = prev_pos;
             }
             break;
         }
     case DONOR_LOW:
         used_state=DONOR_LOW;
         if (nuc[RECOMB] != nuc[ACCEPTOR] && nuc[RECOMB] == nuc[DONOR]) {
-            triggered=true;
+            triggered='D';
             start_range_high = prev_pos;
+            end_range_low=prev_pos;
             state = DONOR_HIGH;
         }
         break;
@@ -294,7 +300,7 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
             state = ACCEPTOR_HIGH;
         } else {
             if (nuc[RECOMB] != nuc[ACCEPTOR] && nuc[RECOMB] == nuc[DONOR]) {
-                triggered=true;
+                triggered='D';
                 end_range_low = prev_pos;
             }
             break;
@@ -302,7 +308,7 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
     case ACCEPTOR_HIGH:
         used_state=ACCEPTOR_HIGH;
         if (nuc[RECOMB] == nuc[ACCEPTOR] && nuc[RECOMB] != nuc[DONOR]) {
-            triggered=true;
+            triggered='A';
             end_range_high = prev_pos;
             stop=true;
         }
@@ -313,12 +319,12 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
         +MAT::get_nuc(nuc[RECOMB])+"\t"
         );
     switch (used_state) {
-        case ACCEPTOR_LOW: diagnoistic_string+="ACCEPTOR_LOW";
-        case DONOR_LOW: diagnoistic_string+="DONOR_LOW";
-        case DONOR_HIGH: diagnoistic_string+="DONOR_HIGH";
-        case ACCEPTOR_HIGH: diagnoistic_string+="ACCEPTOR_HIGH";
+        case ACCEPTOR_LOW: diagnoistic_string+="ACCEPTOR_LOW"; break;
+        case DONOR_LOW: diagnoistic_string+="DONOR_LOW";break;
+        case DONOR_HIGH: diagnoistic_string+="DONOR_HIGH";break;
+        case ACCEPTOR_HIGH: diagnoistic_string+="ACCEPTOR_HIGH";break;
     }
-    diagnoistic_string=diagnoistic_string+"\t"+((prev_pos==start_pos)?"*":"-")+"\t"+((prev_pos==end_pos)?"*":"-")+"\t"+(triggered?"*":"-")+"\n";
+    diagnoistic_string=diagnoistic_string+"\t"+((prev_pos==start_pos)?"*":"-")+"\t"+((prev_pos==end_pos)?"*":"-")+"\t"+triggered+"\n";
     return stop;
 }
 static void
@@ -326,7 +332,7 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
            const std::vector<Recomb_Node> &acceptor_nodes,
            const std::vector<MAT::Mutation> &pruned_sample_mutations, int i,
            int j, int parsimony_threshold, const MAT::Tree &T,
-           tbb::concurrent_vector<Recomb_Interval> &valid_pairs) {
+           tbb::concurrent_vector<Recomb_Interval> &valid_pairs,const MAT::Node* recomb_node) {
     bool has_printed = false;
 
     for (auto d : donor_nodes) {
@@ -346,7 +352,7 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                 break;
             }
             if (d.node != a.node) {
-                std::string diagnoistic_string="donor:"+d.node->identifier+", acceptor:"+a.node->identifier+
+                std::string diagnoistic_string="donor:"+d.node->identifier+", acceptor:"+a.node->identifier+"recomb_node:"+recomb_node->identifier+
                     "\nposition\tdonor\tacceptor\trecomb\tstate\ti\tj\ttriggered\n";
                 auto start_pos = pruned_sample_mutations[i].position;
                 auto end_pos = pruned_sample_mutations[j].position;
@@ -364,6 +370,9 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                         stop=set_interval(start_pos, end_pos, state, start_range_low,
                                   start_range_high, end_range_low,
                                   end_range_high, nuc, prev_pos,diagnoistic_string);
+                        if (stop) {
+                            break;
+                        }
                         for (int type_idx = 0; type_idx < 3; type_idx++) {
                             nuc[type_idx] = mut.ref_nuc;
                         }
@@ -375,6 +384,15 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                 set_interval(start_pos, end_pos, state, start_range_low,
                                   start_range_high, end_range_low,
                                   end_range_high, nuc, prev_pos,diagnoistic_string);
+                }
+                 if (!
+                (
+                    start_range_low<=start_range_high&&
+                    start_range_high<=end_range_low&&
+                    end_range_low<=end_range_high    
+                )) {
+                    fputs(diagnoistic_string.c_str(),stderr);
+                    continue;
                 }
                 diagnoistic_string+=("start_range_low:"+std::to_string(start_range_low)+
                 "start_range_high:"+std::to_string(start_range_high)+
@@ -405,6 +423,7 @@ struct check_breakpoint {
     const std::vector<MAT::Node *> &nodes_to_search;
     const MAT::Tree &T;
     tbb::concurrent_vector<Recomb_Interval> &valid_pairs;
+    const MAT::Node* recomb_node;
     void operator()(std::pair<int,int> in) const {
         int i=in.first;
         int j=in.second;
@@ -450,7 +469,7 @@ struct check_breakpoint {
         std::sort(acceptor_filtered.begin(), acceptor_filtered.end());
         std::sort(donor_filtered.begin(), donor_filtered.end());
         find_pairs(donor_filtered, acceptor_filtered, pruned_sample_mutations,
-                   i, j, pasimony_threshold, T, valid_pairs);
+                   i, j, pasimony_threshold, T, valid_pairs,recomb_node);
     }
 };
 
@@ -532,7 +551,7 @@ void ripplrs_merger(const Pruned_Sample &pruned_sample,
             check_breakpoint{out_ifc, sample_mutations,
                              skip_start_idx,skip_end_idx,
                              node_size, pasimony_threshold,
-                             nodes_to_search, T, valid_pairs})
+                             nodes_to_search, T, valid_pairs,pruned_node})
 
     );
 

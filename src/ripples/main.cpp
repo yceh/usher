@@ -1,3 +1,5 @@
+#include <algorithm>
+#include <cstddef>
 #include <time.h>
 #include <array>
 #include <fstream>
@@ -291,9 +293,9 @@ int main(int argc, char** argv) {
     size_t s = 0, e = nodes_to_consider.size();
 
     if ((start_idx >= 0) && (end_idx >= 0)) {
-        s = start_idx;
+        s = std::max((size_t)start_idx,nodes_to_consider.size());
         if (end_idx <= (int) e) {
-            e = end_idx;
+            e = std::max((size_t)end_idx,nodes_to_consider.size());
         }
     }
 
@@ -685,9 +687,10 @@ int main(int argc, char** argv) {
         valid_pairs = combine_intervals(valid_pairs);
         //print combined pairs
         for(auto p: valid_pairs) {
+            std::string end_range_low_str = (p.end_range_low == 1e9) ? "GENOME_SIZE" : std::to_string(p.end_range_low);
             std::string end_range_high_str = (p.end_range_high == 1e9) ? "GENOME_SIZE" : std::to_string(p.end_range_high);
-            fprintf(recomb_file, "%s\t(%i,%i)\t(%i,%s)\t%s\t%c\t%i\t%s\t%c\t%i\t%i\t%i\t%i\n", nid_to_consider.c_str(), p.start_range_low,
-                    p.start_range_high, p.end_range_low, end_range_high_str.c_str(), p.d.name.c_str(), p.d.is_sibling, p.d.node_parsimony,
+            fprintf(recomb_file, "%s\t(%i,%i)\t(%s,%s)\t%s\t%c\t%i\t%s\t%c\t%i\t%i\t%i\t%i\n", nid_to_consider.c_str(), p.start_range_low,
+                    p.start_range_high, end_range_low_str.c_str(), end_range_high_str.c_str(), p.d.name.c_str(), p.d.is_sibling, p.d.node_parsimony,
                     p.a.name.c_str(), p.a.is_sibling, p.a.node_parsimony, orig_parsimony,
                     std::min({orig_parsimony, p.d.node_parsimony, p.a.node_parsimony}), p.d.parsimony+p.a.parsimony);
             fflush(recomb_file);

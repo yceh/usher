@@ -1,4 +1,6 @@
 #include <boost/program_options.hpp>
+#include <cstddef>
+#include <functional>
 #include <src/mutation_annotated_tree.hpp>
 #include <signal.h>
 #include <iostream>
@@ -110,8 +112,26 @@ struct Recomb_Interval {
     operator<(const Recomb_Interval &other) const { // compare second interval
         return end_range_low < other.end_range_low;
     }
+    bool operator==(const Recomb_Interval& other) const{
+        return (d.node==other.d.node)&&
+        (a.node==other.a.node)&&
+        (start_range_high==other.start_range_high)&&
+        (start_range_low==other.start_range_low)&&
+        (end_range_high==other.end_range_high)&&
+        (end_range_low==other.end_range_low);
+    }
 };
-
+template<>
+struct std::hash<Recomb_Interval>{
+    size_t operator()(const Recomb_Interval& in) const{
+        return std::hash<const MAT::Node*>()(in.a.node)^
+            std::hash<const MAT::Node*>()(in.d.node)^
+            std::hash<int>()(in.start_range_high)^
+            std::hash<int>()(in.start_range_low)^
+            std::hash<int>()(in.end_range_low)^
+            std::hash<int>()(in.end_range_high);
+    }
+};
 struct Comp_First_Interval {
     inline bool operator()(const Recomb_Interval &one,
                            const Recomb_Interval &other) {

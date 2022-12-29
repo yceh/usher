@@ -7,6 +7,7 @@
 #include <memory>
 #include <random>
 #include <time.h>
+#include <unordered_set>
 #include <vector>
 #define CHECK_MAPPER
 Timer timer;
@@ -266,8 +267,8 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
 }
 Ripple_Result_Pack* Ripple_Pipeline::operator()(MAT::Node* node_to_consider) const {
-    fprintf(stderr, "At node id: %s\n",
-            node_to_consider->identifier.c_str());
+    /*fprintf(stderr, "At node id: %s\n",
+            node_to_consider->identifier.c_str());*/
 
     int orig_parsimony = (int)node_to_consider->mutations.size();
 
@@ -292,7 +293,8 @@ Ripple_Result_Pack* Ripple_Pipeline::operator()(MAT::Node* node_to_consider) con
                    parsimony_threshold, T,
                    valid_pairs_con, mapper_out, num_threads, branch_len,
                    min_range, max_range);
-    std::vector<Recomb_Interval> temp(std::vector<Recomb_Interval>(valid_pairs_con.begin(),valid_pairs_con.end()));
+    std::unordered_set<Recomb_Interval> temp1(valid_pairs_con.begin(),valid_pairs_con.end());
+    std::vector<Recomb_Interval> temp(temp1.begin(),temp1.end());
     std::sort(temp.begin(),temp.end(),interval_sorter());
     /*       for(auto p: temp) {
                std::string end_range_high_str = (p.end_range_high == 1e9) ? "GENOME_SIZE" : std::to_string(p.end_range_high);
@@ -338,11 +340,11 @@ void Ripple_Finalizer::operator()(Ripple_Result_Pack* result) const {
         }
         fprintf(desc_file, "\n");
         fflush(desc_file);
-        fprintf(stderr, "Done %zu/%zu branches [RECOMBINATION FOUND!]\n\n",
-                ++num_done, total_size);
+        /*fprintf(stderr, "Done %zu/%zu branches [RECOMBINATION FOUND!]\n\n",
+                ++num_done, total_size);*/
     } else {
-        fprintf(stderr, "Done %zu/%zu branches\n\n", ++num_done,
-                total_size);
+        /*fprintf(stderr, "Done %zu/%zu branches\n\n", ++num_done,
+                total_size);*/
     }
     delete result;
 }
