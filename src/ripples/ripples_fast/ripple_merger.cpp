@@ -284,6 +284,9 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
             }
             if (nuc[RECOMB] != nuc[ACCEPTOR] && nuc[RECOMB] == nuc[DONOR]) {
                 triggered='D';
+                if(prev_pos==start_pos){
+                    state = DONOR_HIGH;
+                }
                 start_range_high = prev_pos;
                 end_range_low = prev_pos;
             }
@@ -306,6 +309,11 @@ bool set_interval(int start_pos, int end_pos, Interval_State &state,
             if (nuc[RECOMB] != nuc[ACCEPTOR] && nuc[RECOMB] == nuc[DONOR]) {
                 triggered='D';
                 end_range_low = prev_pos;
+            }
+            if(prev_pos==end_pos&&(nuc[RECOMB] == nuc[ACCEPTOR] && nuc[RECOMB] != nuc[DONOR])){
+                triggered='A';
+                end_range_high = prev_pos;
+                stop=true;
             }
             break;
         }
