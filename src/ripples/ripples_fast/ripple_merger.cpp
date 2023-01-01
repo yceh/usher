@@ -393,6 +393,7 @@ struct Valid_Pair_Outputter{
     const Recomb_Node& acceptor_node;
     const Recomb_Node& donor_node;
     int threshold;
+    int non_correctable;
     #ifdef DIAGNOSTICS
     std::string& diagnoistic_string;
     #endif
@@ -401,7 +402,7 @@ struct Valid_Pair_Outputter{
         if (par_score<=threshold) {
             valid_pairs.push_back(
                     Recomb_Interval(donor_node, acceptor_node, acc_to_don.interval_start, acc_to_don.interval_end,
-                                    don_to_acc.interval_start,don_to_acc.interval_end));
+                                    don_to_acc.interval_start,don_to_acc.interval_end,non_correctable+par_score));
                     diagnoistic_string=diagnoistic_string+
                         "start_low"+std::to_string(acc_to_don.interval_start)+
                         "start_high"+std::to_string(acc_to_don.interval_end)+
@@ -415,7 +416,7 @@ struct Valid_Pair_Outputter{
         if (par_score<=threshold) {
             valid_pairs.push_back(
                     Recomb_Interval(acceptor_node,donor_node, 
-                                    don_to_acc.interval_start,don_to_acc.interval_end,1e9,1e9));
+                                    don_to_acc.interval_start,don_to_acc.interval_end,1e9,1e9,non_correctable+par_score));
                     diagnoistic_string=diagnoistic_string+
                         "end_low"+std::to_string(don_to_acc.interval_start)+
                         "end_high"+std::to_string(don_to_acc.interval_end)+"\n";
@@ -521,6 +522,7 @@ find_pairs(const std::vector<Recomb_Node> &donor_nodes,
                     a,
                     d,
                     parsimony_threshold-state.uncorrectable,
+                    state.uncorrectable,
                     state.diagnoistic_string
                 };
                 #ifdef DIAGNOSTICS
@@ -650,7 +652,7 @@ struct search_position {
     }
 };
 
-void ripplrs_merger(const Pruned_Sample &pruned_sample,
+int ripplrs_merger(const Pruned_Sample &pruned_sample,
                     const std::vector<int> & idx_map,
                     const std::vector<MAT::Node *> &nodes_to_search,
                     int pasimony_threshold,
@@ -674,7 +676,7 @@ void ripplrs_merger(const Pruned_Sample &pruned_sample,
         actual_threshold);
         pasimony_threshold=actual_threshold;
         if (pasimony_threshold<0) {
-            return;
+            return actual_min_pars;
         }
     }else if(actual_threshold>pasimony_threshold) {
         fprintf(stderr, "ERROR:%s,old thresh%d new_thresh%d\n",pruned_sample.sample_name->identifier.c_str(),pasimony_threshold,actual_min_pars);
@@ -703,4 +705,5 @@ void ripplrs_merger(const Pruned_Sample &pruned_sample,
                              })
 
     );
+    return actual_min_pars;
 }

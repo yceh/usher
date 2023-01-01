@@ -289,7 +289,7 @@ Ripple_Result_Pack* Ripple_Pipeline::operator()(MAT::Node* node_to_consider) con
     ripples_mapper(pruned_sample, mapper_out, nodes_to_seach.size(),index_map,do_parallel, traversal_track,tree_height,T.root,node_to_consider);
     //==== END new mapper
     tbb::concurrent_vector<Recomb_Interval> valid_pairs_con;
-    ripplrs_merger(pruned_sample, index_map,nodes_to_seach, 
+    orig_parsimony=ripplrs_merger(pruned_sample, index_map,nodes_to_seach, 
                    parsimony_threshold, T,
                    valid_pairs_con, mapper_out, num_threads, branch_len,
                    min_range, max_range,parsimony_improvement);
@@ -332,7 +332,7 @@ void Ripple_Finalizer::operator()(Ripple_Result_Pack* result) const {
             p.a.is_sibling?'y':'n', acceptor_adj_parsimony, orig_parsimony,
             std::min(
         {orig_parsimony, donor_adj_parsimony, acceptor_adj_parsimony}),
-        p.d.parsimony + p.a.parsimony);
+        p.recomb_parsimony);
         fflush(recomb_file);
     }
 

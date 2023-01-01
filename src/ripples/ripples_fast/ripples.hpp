@@ -105,10 +105,11 @@ struct Recomb_Interval {
     int start_range_high;
     int end_range_low;
     int end_range_high;
+    int recomb_parsimony;
     Recomb_Interval(Recomb_Node donor, Recomb_Node acceptor, int sl, int sh,
-                    int el, int eh)
+                    int el, int eh,int recomb_parsimony)
         : d(donor), a(acceptor), start_range_low(sl), start_range_high(sh),
-          end_range_low(el), end_range_high(eh) {}
+          end_range_low(el), end_range_high(eh),recomb_parsimony(recomb_parsimony) {}
     bool
     operator<(const Recomb_Interval &other) const { // compare second interval
         return end_range_low < other.end_range_low;
@@ -153,7 +154,7 @@ void ripples_mapper(const Pruned_Sample &sample,
                     const unsigned short tree_height,
                     const MAT::Node *root,
                     const MAT::Node *skip_node) ;
-void ripplrs_merger(const Pruned_Sample &pruned_sample,
+int ripplrs_merger(const Pruned_Sample &pruned_sample,
                     const std::vector<int> & idx_map,
                     const std::vector<MAT::Node *> &nodes_to_search,
                     int pasimony_threshold,
