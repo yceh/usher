@@ -25,6 +25,8 @@ def catOnlyBest():
             if not splitLine[0].startswith('#'):
 
                 ### REPLACE TEXT
+                if 'GENOME_SIZE' in splitLine[1]:
+                    splitLine[1] = splitLine[1].replace('GENOME_SIZE', '29903')
                 if 'GENOME_SIZE' in splitLine[2]:
                     splitLine[2] = splitLine[2].replace('GENOME_SIZE', '29903')
                 for i in [0,3,6]:

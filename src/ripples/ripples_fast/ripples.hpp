@@ -1,4 +1,7 @@
+#include <boost/functional/hash.hpp>
 #include <boost/program_options.hpp>
+#include <cstddef>
+#include <functional>
 #include <src/mutation_annotated_tree.hpp>
 #include <signal.h>
 #include <iostream>
@@ -102,16 +105,37 @@ struct Recomb_Interval {
     int start_range_high;
     int end_range_low;
     int end_range_high;
+    int recomb_parsimony;
     Recomb_Interval(Recomb_Node donor, Recomb_Node acceptor, int sl, int sh,
-                    int el, int eh)
+                    int el, int eh,int recomb_parsimony)
         : d(donor), a(acceptor), start_range_low(sl), start_range_high(sh),
-          end_range_low(el), end_range_high(eh) {}
+          end_range_low(el), end_range_high(eh),recomb_parsimony(recomb_parsimony) {}
     bool
     operator<(const Recomb_Interval &other) const { // compare second interval
         return end_range_low < other.end_range_low;
     }
+    bool operator==(const Recomb_Interval& other) const{
+        return (d.node==other.d.node)&&
+        (a.node==other.a.node)&&
+        (start_range_high==other.start_range_high)&&
+        (start_range_low==other.start_range_low)&&
+        (end_range_high==other.end_range_high)&&
+        (end_range_low==other.end_range_low);
+    }
 };
-
+template<>
+struct std::hash<Recomb_Interval>{
+    size_t operator()(const Recomb_Interval& in) const{
+        size_t seed=0;
+        boost::hash_combine(seed, in.a.node);
+        boost::hash_combine(seed, in.d.node);
+        boost::hash_combine(seed, in.start_range_low);
+        boost::hash_combine(seed, in.start_range_high);
+        boost::hash_combine(seed, in.end_range_low);
+        boost::hash_combine(seed, in.end_range_high);
+        return seed;
+    }
+};
 struct Comp_First_Interval {
     inline bool operator()(const Recomb_Interval &one,
                            const Recomb_Interval &other) {
@@ -130,15 +154,15 @@ void ripples_mapper(const Pruned_Sample &sample,
                     const unsigned short tree_height,
                     const MAT::Node *root,
                     const MAT::Node *skip_node) ;
-void ripplrs_merger(const Pruned_Sample &pruned_sample,
+int ripplrs_merger(const Pruned_Sample &pruned_sample,
                     const std::vector<int> & idx_map,
                     const std::vector<MAT::Node *> &nodes_to_search,
-                    size_t node_size, int pasimony_threshold,
+                    int pasimony_threshold,
                     const MAT::Tree &T,
                     tbb::concurrent_vector<Recomb_Interval> &valid_pairs,
                     const Ripples_Mapper_Output_Interface &out_ifc,
                     int nthreads, int branch_len, int min_range,
-                    int max_range) ;
+                    int max_range,int min_improvement) ;
 size_t check_parallelizable(const MAT::Node *root,
                             std::vector<bool> &do_parallel,
                             size_t parallel_threshold,

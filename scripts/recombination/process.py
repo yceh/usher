@@ -62,7 +62,9 @@ start_ripples = timeit.default_timer()
 
 # Run ripples on current GCP instance
 cmd = parse_ripples_command(version, mat, start_range, end_range, num_descendants)
-ripple_proc=subprocess.run(cmd,stderr=subprocess.DEVNULL)
+with open("ripples_stdout", "w") as  ripples_stdout:
+  with open("ripples_stderr", "w") as  ripples_stderr:
+    subprocess.run(cmd,stderr=ripples_stderr,stdout=ripples_stdout)
 # Stop timer for RIPPLES
 stop_ripples = timeit.default_timer()
 # Start runtime for filtration pipeline

@@ -7,6 +7,7 @@
 #include <memory>
 #include <random>
 #include <time.h>
+#include <unordered_set>
 #include <vector>
 #define CHECK_MAPPER
 Timer timer;
@@ -137,13 +138,13 @@ int main(int argc, char **argv) {
                         words[0].c_str());
                 exit(1);
             } else {
-                /*for (auto anc : T.rsearch(n->identifier, true)) {
+                for (auto anc : T.rsearch(n->identifier, true)) {
                      if (anc->is_root()) {
                          continue;
                      }
                     nodes_to_consider.insert(anc);
-                }*/
-                nodes_to_consider.insert(n);
+                }
+                //nodes_to_consider.insert(n);
             }
         }
         infile.close();
@@ -266,8 +267,8 @@ int main(int argc, char **argv) {
     fprintf(stderr, "Completed in %ld msec \n\n", timer.Stop());
 }
 Ripple_Result_Pack* Ripple_Pipeline::operator()(MAT::Node* node_to_consider) const {
-    fprintf(stderr, "At node id: %s\n",
-            node_to_consider->identifier.c_str());
+    /*fprintf(stderr, "At node id: %s\n",
+            node_to_consider->identifier.c_str());*/
 
     int orig_parsimony = (int)node_to_consider->mutations.size();
 
@@ -288,11 +289,12 @@ Ripple_Result_Pack* Ripple_Pipeline::operator()(MAT::Node* node_to_consider) con
     ripples_mapper(pruned_sample, mapper_out, nodes_to_seach.size(),index_map,do_parallel, traversal_track,tree_height,T.root,node_to_consider);
     //==== END new mapper
     tbb::concurrent_vector<Recomb_Interval> valid_pairs_con;
-    ripplrs_merger(pruned_sample, index_map,nodes_to_seach, nodes_to_seach.size(),
+    orig_parsimony=ripplrs_merger(pruned_sample, index_map,nodes_to_seach, 
                    parsimony_threshold, T,
                    valid_pairs_con, mapper_out, num_threads, branch_len,
-                   min_range, max_range);
-    std::vector<Recomb_Interval> temp(std::vector<Recomb_Interval>(valid_pairs_con.begin(),valid_pairs_con.end()));
+                   min_range, max_range,parsimony_improvement);
+    std::unordered_set<Recomb_Interval> temp1(valid_pairs_con.begin(),valid_pairs_con.end());
+    std::vector<Recomb_Interval> temp(temp1.begin(),temp1.end());
     std::sort(temp.begin(),temp.end(),interval_sorter());
     /*       for(auto p: temp) {
                std::string end_range_high_str = (p.end_range_high == 1e9) ? "GENOME_SIZE" : std::to_string(p.end_range_high);
@@ -315,19 +317,22 @@ void Ripple_Finalizer::operator()(Ripple_Result_Pack* result) const {
         std::string end_range_high_str =
             (p.end_range_high == 1e9) ? "GENOME_SIZE"
             : std::to_string(p.end_range_high);
+        std::string end_range_low_str =
+            (p.end_range_low == 1e9) ? "GENOME_SIZE"
+            : std::to_string(p.end_range_low);
         auto donor_adj_parsimony=p.d.node_parsimony+!p.d.is_sibling;
         auto acceptor_adj_parsimony=p.a.node_parsimony+!p.a.is_sibling;
         fprintf(
             recomb_file,
-            "%s\t(%i,%i)\t(%i,%s)\t%s\t%c\t%i\t%s\t%c\t%i\t%i\t%i\t%i\n",
+            "%s\t(%i,%i)\t(%s,%s)\t%s\t%c\t%i\t%s\t%c\t%i\t%i\t%i\t%i\n",
             node_to_consider->identifier.c_str(), p.start_range_low,
-            p.start_range_high, p.end_range_low, end_range_high_str.c_str(),
+            p.start_range_high, end_range_low_str.c_str(), end_range_high_str.c_str(),
             p.d.node->identifier.c_str(), p.d.is_sibling?'y':'n',
             donor_adj_parsimony, p.a.node->identifier.c_str(),
             p.a.is_sibling?'y':'n', acceptor_adj_parsimony, orig_parsimony,
             std::min(
         {orig_parsimony, donor_adj_parsimony, acceptor_adj_parsimony}),
-        p.d.parsimony + p.a.parsimony);
+        p.recomb_parsimony);
         fflush(recomb_file);
     }
 
@@ -338,11 +343,11 @@ void Ripple_Finalizer::operator()(Ripple_Result_Pack* result) const {
         }
         fprintf(desc_file, "\n");
         fflush(desc_file);
-        fprintf(stderr, "Done %zu/%zu branches [RECOMBINATION FOUND!]\n\n",
-                ++num_done, total_size);
+        /*fprintf(stderr, "Done %zu/%zu branches [RECOMBINATION FOUND!]\n\n",
+                ++num_done, total_size);*/
     } else {
-        fprintf(stderr, "Done %zu/%zu branches\n\n", ++num_done,
-                total_size);
+        /*fprintf(stderr, "Done %zu/%zu branches\n\n", ++num_done,
+                total_size);*/
     }
     delete result;
 }

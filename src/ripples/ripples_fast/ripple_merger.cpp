@@ -3,7 +3,17 @@
 #include <algorithm>
 #include <cassert>
 #include <csignal>
+#include <cstddef>
+#include <functional>
+#include <iostream>
+#include <limits>
 #include <stdio.h>
+#include <string>
+#include <string_view>
+#include <tbb/concurrent_unordered_set.h>
+#include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 #ifdef __SSE2__
 #include <emmintrin.h>
@@ -13,6 +23,7 @@ typedef  int __v4i __attribute__((__vector_size__(16)));
 typedef char __v16b __attribute__((__vector_size__(16)));
 typedef unsigned short __v8hu_u __attribute__((__vector_size__(16), __aligned__(1)));
 #endif
+#define DIAGNOSTICS
 static int acceptor (const Mut_Count_Out_t &counts, size_t i, size_t j,
                      size_t curr_node_idx, size_t node_size,
                      size_t num_mutations) {
@@ -43,6 +54,15 @@ static void push_val(std::vector<int> &filtered_idx,
         }
     }
 }
+template<typename T1,typename T2>
+struct std::hash<std::pair<T1, T2>>{
+    size_t operator()(const std::pair<T1, T2>& in) const{
+        size_t seed=0;
+        boost::hash_combine(seed, in.first);
+        boost::hash_combine(seed, in.second);
+        return seed;
+    }
+};
 static unsigned short min_8(__v8h in) {
     __v8h temp1=(__v8h)__builtin_ia32_pshufd((__v4i)in,0x4e);
     auto min1=__builtin_ia32_pminsw128(temp1,in);
@@ -61,6 +81,17 @@ static unsigned short min_8(__v8h in) {
     return out;
 }
 #endif
+static int min_parsimony(const Ripples_Mapper_Output_Interface &out_ifc,size_t node_size, size_t num_mutations, size_t skip_start_idx, size_t skip_end_idx){
+    unsigned short cur_min=std::numeric_limits<unsigned short>::max();
+
+    for (size_t node_idx=0; node_idx<skip_start_idx; node_idx++) {
+        cur_min=std::min(cur_min,out_ifc.mut_count_out[node_size*num_mutations+node_idx].count_before_exclusive());
+    }
+    for (size_t node_idx=skip_end_idx; node_idx<node_size; node_idx++) {
+        cur_min=std::min(cur_min,out_ifc.mut_count_out[node_size*num_mutations+node_idx].count_before_exclusive());
+    }
+    return cur_min;
+}
 static std::pair<int,int> filter(const Ripples_Mapper_Output_Interface &out_ifc, size_t i,
                                  size_t j, size_t node_size, size_t num_mutations,
                                  int idx_start,int idx_end,
@@ -210,13 +241,235 @@ static void threshold_parsimony(const Ripples_Mapper_Output_Interface &out_ifc,
         }
     }
 }
-
-static void find_pairs(
-    const std::vector<Recomb_Node> &donor_nodes,
-    const std::vector<Recomb_Node> &acceptor_nodes,
-    const std::vector<MAT::Mutation> &pruned_sample_mutations, int i, int j,
-    int parsimony_threshold,
-    const MAT::Tree &T, tbb::concurrent_vector<Recomb_Interval> &valid_pairs) {
+enum Node_Type{DONOR,ACCEPTOR,RECOMB};
+struct Merging_Nuc_Type{
+    int position;
+    char nuc;
+    char ref_nuc;
+    char par_nuc;
+    Node_Type node_Type;
+};
+typedef std::unordered_map<int, Merging_Nuc_Type> Mut_Map_T;
+static void gather_mutations(Mut_Map_T& mutations, Node_Type node_type,const MAT::Node* node,bool track_par_nuc){
+    if(!node){
+        return;
+    }
+    for (const auto& mut : node->mutations) {
+        mutations.emplace(mut.position,Merging_Nuc_Type{mut.position,mut.mut_nuc,mut.ref_nuc,track_par_nuc?mut.par_nuc:mut.mut_nuc ,node_type});
+    }
+    gather_mutations(mutations, node_type, node->parent,false);
+}
+static void fill_muts(std::vector<Merging_Nuc_Type>& to_fill, const Mut_Map_T& filler){
+    for (const auto& mut : filler) {
+        if ((mut.second.nuc!=mut.second.ref_nuc)||mut.second.par_nuc) {
+            to_fill.push_back(mut.second);
+        }
+    }
+}
+std::vector<Merging_Nuc_Type> merge_nuc(const MAT::Node* acceptor,const MAT::Node* donor, const std::vector<MAT::Mutation>& recomb_muts){
+    Mut_Map_T accptor_muts;
+    gather_mutations(accptor_muts, ACCEPTOR, acceptor,true);
+    Mut_Map_T donor_muts;
+    gather_mutations(donor_muts, DONOR, donor,true);
+    std::vector<Merging_Nuc_Type> ret_val;
+    ret_val.reserve(accptor_muts.size()+donor_muts.size()+recomb_muts.size());
+    for (const auto& mut : recomb_muts) {
+        if (mut.mut_nuc!=mut.ref_nuc) {
+            ret_val.push_back(Merging_Nuc_Type{mut.position,mut.mut_nuc,mut.ref_nuc,mut.mut_nuc,RECOMB});
+        }
+    }
+    fill_muts(ret_val, accptor_muts);
+    fill_muts(ret_val, donor_muts);
+    std::sort(ret_val.begin(),ret_val.end(),[](const Merging_Nuc_Type& l,const Merging_Nuc_Type& r){
+        return l.position<r.position;
+    });
+    return ret_val;
+}
+/*struct Searched_Pairs{
+    const MAT::Node* node_a;
+    const MAT::Node* node_b;
+    bool operator==(const Searched_Pairs& other){
+        return (node_a==other.node_a&&node_b==other.node_b)
+            ||(node_a==other.node_b&&node_b==other.node_a);
+    }
+};
+template<>
+struct std::hash<Searched_Pairs>{
+    size_t operator()(const Searched_Pairs& in) const{
+        return std::hash<const MAT::Node*>()(in.node_a)^std::hash<const MAT::Node*>()(in.node_b);
+    }
+};*/
+typedef std::pair<const MAT::Node*, const MAT::Node*> Searched_Pairs ;
+enum Informative_Type:int {NO_MATCH=0,MATCH_DONOR=1,MATCH_ACCEPTOR=2,MATCH_BOTH=3};
+std::string to_string(Informative_Type in){
+    switch (in) {
+        case MATCH_ACCEPTOR:return "MATCH_ACCEPTOR";
+        case MATCH_DONOR:return "MATCH_DONOR";
+        case MATCH_BOTH:return "MATCH_BOTH";
+        case NO_MATCH:return "NO_MATCH";
+    }
+    return "ERR";
+}
+/*struct Cnt_Type{
+    int cnt[2];
+    Cnt_Type(){
+        cnt[0]=1;
+        cnt[1]=1;
+    }
+    int& operator[](Informative_Type type){
+        return cnt[type-1];
+    }
+    int operator[](Informative_Type type) const{
+        return cnt[type-1];
+    }
+};*/
+struct Change_Point{
+    int interval_start;
+    int interval_end;
+    //Cnt_Type prev_cnt;
+    int prev_acceptor_match;
+    int prev_donor_match;
+    Informative_Type end_inf_type;
+};
+struct Change_Point_Finder_State{
+    int uncorrectable;
+    //Cnt_Type prev_cnt;
+    int prev_acceptor_match;
+    int prev_donor_match;
+    int prev_informative_pos;
+    Informative_Type cur_informative_type; //place holder for first;
+    Informative_Type init_informative_type; //place holder for first;
+    std::vector<Change_Point> change_points;
+    #ifdef DIAGNOSTICS
+    std::string diagnoistic_string;
+    #endif
+    Change_Point_Finder_State():uncorrectable(0),prev_acceptor_match(0),prev_donor_match(0),prev_informative_pos(0),cur_informative_type(NO_MATCH),init_informative_type(NO_MATCH){
+    }
+};
+static Informative_Type get_informative_type(char *nuc){
+    return Informative_Type{(nuc[RECOMB]==nuc[DONOR])|((nuc[RECOMB]==nuc[ACCEPTOR])<<1)};
+}
+static void change_point_finder(Change_Point_Finder_State& state, int prev_pos, char* nuc,char* par_nuc){
+    if (prev_pos==-1) {
+        return;
+    }
+    auto this_informative_type=get_informative_type(nuc);
+    auto par_informative_type=get_informative_type(par_nuc);
+    this_informative_type=Informative_Type(this_informative_type|par_informative_type);
+    if ((this_informative_type==MATCH_DONOR||this_informative_type==MATCH_ACCEPTOR)) {
+        if (state.cur_informative_type==NO_MATCH) {
+            state.init_informative_type=this_informative_type;
+        }else if (this_informative_type!=state.cur_informative_type) {
+            state.change_points.push_back(Change_Point{
+                state.prev_informative_pos,
+                prev_pos,
+                state.prev_acceptor_match,
+                state.prev_donor_match,
+                this_informative_type});
+        }
+        state.prev_informative_pos=prev_pos;
+        state.cur_informative_type=this_informative_type;
+    }
+    switch (this_informative_type) {
+        case MATCH_ACCEPTOR: state.prev_acceptor_match++; break;
+        case MATCH_DONOR: state.prev_donor_match++; break;
+        case NO_MATCH:state.uncorrectable++; break;
+        default: ;
+    }
+    #ifdef DIAGNOSTICS
+    state.diagnoistic_string+=(
+        std::to_string(prev_pos)+'\t'+
+        MAT::get_nuc(nuc[DONOR])+'\t'+
+        MAT::get_nuc(nuc[ACCEPTOR])+'\t'+
+        MAT::get_nuc(nuc[RECOMB])+'\t'+
+        MAT::get_nuc(par_nuc[DONOR])+'\t'+
+        MAT::get_nuc(par_nuc[ACCEPTOR])+'\t'+
+        to_string(this_informative_type)+'\n'
+    );
+    #endif
+}
+struct Valid_Pair_Outputter{
+    tbb::concurrent_vector<Recomb_Interval> &valid_pairs;
+    const Recomb_Node& acceptor_node;
+    const Recomb_Node& donor_node;
+    int threshold;
+    int non_correctable;
+    #ifdef DIAGNOSTICS
+    std::string& diagnoistic_string;
+    #endif
+    bool operator()(const Change_Point& acc_to_don,
+        const Change_Point& don_to_acc, int par_score){
+        if (par_score<=threshold) {
+            valid_pairs.push_back(
+                    Recomb_Interval(donor_node, acceptor_node, acc_to_don.interval_start, acc_to_don.interval_end,
+                                    don_to_acc.interval_start,don_to_acc.interval_end,non_correctable+par_score));
+                    diagnoistic_string=diagnoistic_string+
+                        "start_low"+std::to_string(acc_to_don.interval_start)+
+                        "start_high"+std::to_string(acc_to_don.interval_end)+
+                        "end_low"+std::to_string(don_to_acc.interval_start)+
+                        "end_high"+std::to_string(don_to_acc.interval_end)+"\n";
+            return true;
+        }
+        return false;
+    }
+    bool donor_to_acceptor(const Change_Point& don_to_acc, int par_score){
+        if (par_score<=threshold) {
+            valid_pairs.push_back(
+                    Recomb_Interval(acceptor_node,donor_node, 
+                                    don_to_acc.interval_start,don_to_acc.interval_end,1e9,1e9,non_correctable+par_score));
+                    diagnoistic_string=diagnoistic_string+
+                        "end_low"+std::to_string(don_to_acc.interval_start)+
+                        "end_high"+std::to_string(don_to_acc.interval_end)+"\n";
+            return true;
+        }
+        return false;
+    }
+};
+static bool compute_break_points(const std::vector<Change_Point>& change_point,
+    int final_acceptor_match,
+    int final_donor_match,
+    Valid_Pair_Outputter& output
+    ){
+    bool found=false;
+    Change_Point null_end_interval;
+    null_end_interval.interval_end=1e9;
+    null_end_interval.interval_start=1e9;
+    //single donor to acceptor
+    for (const auto& point :change_point) {
+        if (point.end_inf_type==MATCH_ACCEPTOR) {
+            auto donor_seg_par=point.prev_acceptor_match;
+            auto acceptor_seg_par=final_donor_match-point.prev_donor_match;
+            found|=output.donor_to_acceptor(point, donor_seg_par+acceptor_seg_par);        
+        }
+    }
+    for(size_t start_idx=0;start_idx<change_point.size();start_idx++){
+        if (change_point[start_idx].end_inf_type==MATCH_DONOR) {
+            //Sites that match neither of the acceptor or donor are already excluded from threshold
+            //Then the "mutation count" before first breakpoint is the number of mutations that only match donor
+            int mut_count=change_point[start_idx].prev_donor_match;
+            //single acceptor to donor break point
+            found|=output(change_point[start_idx],null_end_interval,mut_count+final_acceptor_match-change_point[start_idx].prev_acceptor_match);
+            if (mut_count>output.threshold) {
+                break;
+            }
+            for (size_t end_idx=start_idx+1; end_idx<change_point.size(); end_idx++) {
+                if (change_point[end_idx].end_inf_type==MATCH_ACCEPTOR) {
+                    auto donor_seg_par=change_point[end_idx].prev_acceptor_match-change_point[start_idx].prev_acceptor_match;
+                    auto second_acc_seg_par=final_donor_match-change_point[end_idx].prev_donor_match;
+                    found|=output(change_point[start_idx],change_point[end_idx],mut_count+second_acc_seg_par+donor_seg_par);
+                }
+            }
+        }
+    }
+    return found;
+}
+static void
+find_pairs(const std::vector<Recomb_Node> &donor_nodes,
+           const std::vector<Recomb_Node> &acceptor_nodes,
+           const std::vector<MAT::Mutation> &pruned_sample_mutations, int i,
+           int j, int parsimony_threshold, const MAT::Tree &T,
+           tbb::concurrent_vector<Recomb_Interval> &valid_pairs,const MAT::Node* recomb_node,
+           tbb::concurrent_unordered_set<Searched_Pairs>& searched_pairs) {
     bool has_printed = false;
 
     for (auto d : donor_nodes) {
@@ -235,155 +488,57 @@ static void find_pairs(
             if (parsimony_threshold < d.parsimony + a.parsimony) {
                 break;
             }
-            if ((d.node != a.node)
-                    /*&& (d.name != nid_to_consider) &&
-                        (a.name != nid_to_consider) &&
-                        (orig_parsimony >= d.parsimony + a.parsimony +
-                                               parsimony_improvement)
-                                               */) {
-                int start_range_high = pruned_sample_mutations[i].position+1;
-                int start_range_low =
-                    (i >= 1) ? pruned_sample_mutations[i - 1].position : 0;
-
-                // int end_range_high = pruned_sample_mutations[j].position;
-                int end_range_high = 1e9;
-                int end_range_low =
-                    (j >= 1) ? pruned_sample_mutations[j - 1].position-1 : 0;
-                Pruned_Sample donor;
-                donor.sample_mutations.clear();
-                Pruned_Sample acceptor;
-                acceptor.sample_mutations.clear();
-
-                auto donor_node = d.node;
-
-                for (auto anc : T.rsearch(donor_node->identifier, true)) {
-                    for (auto mut : anc->mutations) {
-                        donor.add_mutation(mut);
-                    }
+            if (d.node != a.node) {
+                auto emplace_res=searched_pairs.emplace(d.node,a.node);
+                if (!emplace_res.second) {
+                    //the pair have been searched
+                    return;
                 }
+                Change_Point_Finder_State state;
+                #ifdef DIAGNOSTICS
+                state.diagnoistic_string="donor:"+d.node->identifier+", acceptor:"+a.node->identifier+"recomb_node:"+recomb_node->identifier+"threshold:"+std::to_string(parsimony_threshold)+
+                    "\nposition\tdonor\tacceptor\trecomb\tdonor_par\tacceptor_par\tinformative_type\n";
+                #endif
+                auto muts = merge_nuc(a.node, d.node, pruned_sample_mutations);
+                int prev_pos= -1;
+                char nuc[]={0,0,0};
+                char par_nuc[]={0,0,0};
 
-                /*for (auto anc : T.rsearch(a.node->identifier, true)) {
-                    for (auto mut : anc->mutations) {
-                        acceptor.add_mutation(mut);
+                for (const auto &mut : muts) {
+                    if (mut.position != prev_pos) {
+                        change_point_finder(state, prev_pos, nuc, par_nuc);
+                        for (int type_idx = 0; type_idx < 3; type_idx++) {
+                            nuc[type_idx] = mut.ref_nuc;
+                            par_nuc[type_idx]=mut.ref_nuc;   
+                        }
+                        prev_pos=mut.position;
                     }
-                }*/
-                for (auto mut : donor.sample_mutations) {
-                    if ((mut.position > start_range_low) &&
-                            (mut.position <= start_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : pruned_sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            start_range_low = mut.position;
-                        }
-                    }
-                    if ((mut.position > end_range_low) &&
-                            (mut.position <= end_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : pruned_sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            end_range_high = mut.position;
-                        }
-                    }
+                    nuc[mut.node_Type]=mut.nuc;
+                    par_nuc[mut.node_Type]=mut.par_nuc;
                 }
-
-                for (auto mut : pruned_sample_mutations) {
-                    if ((mut.position > start_range_low) &&
-                            (mut.position <= start_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : donor.sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            start_range_low = mut.position;
-                        }
-                    }
-                    if ((mut.position > end_range_low) &&
-                            (mut.position <= end_range_high)) {
-                        bool in_pruned_sample = false;
-                        for (auto mut2 : donor.sample_mutations) {
-                            if (mut.position == mut2.position) {
-                                in_pruned_sample = true;
-                            }
-                        }
-                        if (!in_pruned_sample) {
-                            end_range_high = mut.position;
-                        }
-                    }
+                change_point_finder(state, prev_pos, nuc, par_nuc);
+                Valid_Pair_Outputter output{
+                    valid_pairs,
+                    a,
+                    d,
+                    parsimony_threshold-state.uncorrectable,
+                    state.uncorrectable,
+                    state.diagnoistic_string
+                };
+                #ifdef DIAGNOSTICS
+                state.diagnoistic_string+=("uncorrectable:"+std::to_string(state.uncorrectable)+"\n");
+                #endif
+                auto found=compute_break_points(state.change_points, 
+                state.prev_acceptor_match, 
+                state.prev_donor_match, 
+                output);
+                #ifdef DIAGNOSTICS
+                if (!found) {
+                    fprintf(stderr, "===NOT FOUND===\n%s===NOT FOUND END====\n",state.diagnoistic_string.c_str());
                 }
-                /*if (start_range_high==start_range_low) {
-                    //raise(SIGTRAP);
-                }
-                auto recomb_start_high_idx=i;
-                bool reached=false;
-                for (const auto& mut : acceptor.sample_mutations) {
-                    if(!reached){
-                        if(mut.position>=start_range_high){
-                            reached=true;
-                        }
-                    }
-                    if(reached) {
-                        if (mut.position<pruned_sample_mutations[recomb_start_high_idx].position) {
-                            start_range_high=mut.position;
-                            break;
-                        }else if (mut.position==pruned_sample_mutations[recomb_start_high_idx].position) {
-                            if(mut.mut_nuc==pruned_sample_mutations[recomb_start_high_idx].mut_nuc){
-                                recomb_start_high_idx++;
-                            }else {
-                                start_range_high=mut.position;
-                                break;
-                            }
-                        }else {
-                            start_range_high=pruned_sample_mutations[recomb_start_high_idx].position;
-                            break;
-                        }
-                    }
-                }
-                int last_different_position=start_range_low;
-                auto recomb_iter=pruned_sample_mutations.begin();
-                for (auto const& donor_mut : donor.sample_mutations) {
-                    while (recomb_iter!=pruned_sample_mutations.end()&&recomb_iter->position<donor_mut.position) {
-                        if (recomb_iter->position>start_range_low) {
-                            break;
-                        }
-                        last_different_position=recomb_iter->position;
-                        recomb_iter++;
-                    }
-                    if (recomb_iter->position==donor_mut.position) {
-                        if (recomb_iter->position>start_range_low) {
-                            break;
-                        }
-                        if (recomb_iter->mut_nuc!=donor_mut.mut_nuc) {
-                            last_different_position=recomb_iter->position;
-                        }
-                    }else {
-                        if(donor_mut.position>start_range_low){
-                            break;
-                        }
-                        last_different_position=donor_mut.position;
-                    }
-                }
-                start_range_low=last_different_position;
-                if (start_range_high==start_range_low) {
-                    //raise(SIGTRAP);
-                }*/
-
-                // tbb_lock.lock();
-                valid_pairs.push_back(
-                    Recomb_Interval(d, a, start_range_low, start_range_high,
-                                    end_range_low, end_range_high));
-                // tbb_lock.unlock();
-
-                has_printed = true;
+                puts(state.diagnoistic_string.c_str());
+                #endif
+                has_printed=true;
                 break;
             }
         }
@@ -395,6 +550,7 @@ static void find_pairs(
 struct check_breakpoint {
     const Ripples_Mapper_Output_Interface &out_ifc;
     const std::vector<MAT::Mutation> &pruned_sample_mutations;
+    tbb::concurrent_unordered_set<Searched_Pairs>& all_searched_pairs;
     int skip_start_idx;
     int skip_end_idx;
     size_t node_size;
@@ -402,6 +558,7 @@ struct check_breakpoint {
     const std::vector<MAT::Node *> &nodes_to_search;
     const MAT::Tree &T;
     tbb::concurrent_vector<Recomb_Interval> &valid_pairs;
+    const MAT::Node* recomb_node;
     void operator()(std::pair<int,int> in) const {
         int i=in.first;
         int j=in.second;
@@ -447,7 +604,7 @@ struct check_breakpoint {
         std::sort(acceptor_filtered.begin(), acceptor_filtered.end());
         std::sort(donor_filtered.begin(), donor_filtered.end());
         find_pairs(donor_filtered, acceptor_filtered, pruned_sample_mutations,
-                   i, j, pasimony_threshold, T, valid_pairs);
+                   i, j, pasimony_threshold, T, valid_pairs,recomb_node,all_searched_pairs);
     }
 };
 
@@ -495,21 +652,36 @@ struct search_position {
     }
 };
 
-void ripplrs_merger(const Pruned_Sample &pruned_sample,
+int ripplrs_merger(const Pruned_Sample &pruned_sample,
                     const std::vector<int> & idx_map,
                     const std::vector<MAT::Node *> &nodes_to_search,
-                    size_t node_size, int pasimony_threshold,
+                    int pasimony_threshold,
                     const MAT::Tree &T,
                     tbb::concurrent_vector<Recomb_Interval> &valid_pairs,
                     const Ripples_Mapper_Output_Interface &out_ifc,
                     int nthreads, int branch_len, int min_range,
-                    int max_range) {
+                    int max_range,int min_improvement) {
+    const auto &sample_mutations = pruned_sample.sample_mutations;
     auto pruned_node = pruned_sample.sample_name;
-    int skip_start_idx=std::abs(idx_map[pruned_node->dfs_idx]);
+    auto node_size=nodes_to_search.size();
+        int skip_start_idx=std::abs(idx_map[pruned_node->dfs_idx]);
     //The next index after the one corresponding to dfs_idx -1
     int skip_end_idx=std::abs(idx_map[pruned_node->dfs_end_idx]);
+    int actual_min_pars=min_parsimony(out_ifc, node_size, sample_mutations.size(),skip_start_idx,skip_end_idx);
+    auto actual_threshold=actual_min_pars-min_improvement;
+    if (actual_threshold<pasimony_threshold) {
+        fprintf(stderr, "%s\t%d\t%d\n",
+        pruned_sample.sample_name->identifier.c_str(),
+        pasimony_threshold,
+        actual_threshold);
+        pasimony_threshold=actual_threshold;
+        if (pasimony_threshold<0) {
+            return actual_min_pars;
+        }
+    }else if(actual_threshold>pasimony_threshold) {
+        fprintf(stderr, "ERROR:%s,old thresh%d new_thresh%d\n",pruned_sample.sample_name->identifier.c_str(),pasimony_threshold,actual_min_pars);
+    }
 
-    const auto &sample_mutations = pruned_sample.sample_mutations;
     int i = -1;
     int j = 0;
     const auto last_pos = sample_mutations.back().position - min_range;
@@ -517,7 +689,7 @@ void ripplrs_merger(const Pruned_Sample &pruned_sample,
     while (last_i > 0 && sample_mutations[last_i].position > last_pos) {
         last_i--;
     }
-
+    tbb::concurrent_unordered_set<Searched_Pairs> all_searched_pairs;
     tbb::parallel_pipeline(
         nthreads + 1,
         tbb::make_filter<void, std::pair<int, int>>(
@@ -526,12 +698,12 @@ void ripplrs_merger(const Pruned_Sample &pruned_sample,
                             max_range, last_i}) &
         tbb::make_filter<std::pair<int, int>, void>(
             tbb::filter::parallel,
-            check_breakpoint{out_ifc, sample_mutations,
+            check_breakpoint{out_ifc, sample_mutations,all_searched_pairs,
                              skip_start_idx,skip_end_idx,
                              node_size, pasimony_threshold,
-                             nodes_to_search, T, valid_pairs})
+                             nodes_to_search, T, valid_pairs,pruned_node
+                             })
 
     );
-
-
+    return actual_min_pars;
 }
