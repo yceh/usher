@@ -64,7 +64,6 @@ void write_recombination_list(
     // Add header for outfile
     for (std::vector<std::string>::iterator it = header_list.begin();
          it != header_list.end(); ++it) {
-        std::cout << *it << "\n";
         if (it == std::prev(header_list.end())) {
             outfile << *it << "\n";
             break;
