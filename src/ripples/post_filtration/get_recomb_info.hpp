@@ -13,9 +13,9 @@ struct Recombinant {
     std::string recomb_node_id;
     std::string donor_node_id;
     std::string acceptor_node_id;
-    std::string informative_seq; // eg) "AAAAAAAAAAABBB"
+    std::string informative_seq;      // eg) "AAAAAAAAAAABBB"
     std::string informative_position; // eg) "1,2,..."
-    std::string mnk_3seq_values; // eg) "(M,N,K)"
+    std::string mnk_3seq_values;      // eg) "(M,N,K)"
     std::string p_value_3seq;
     std::string descendants;
     std::tuple<std::string, std::string>
@@ -46,24 +46,23 @@ void write_recombination_list(
     std::vector<Ranked_Recombinant> &ranked_recombs, std::ofstream &outfile,
     std::vector<std::string> &header_list);
 
-std::vector<std::string>
-get_recombination_info(MAT::Tree &T, std::string tree_date,
-                       std::unordered_map<std::string, std::string>
-                           &node_to_inferred_date,
-                       std::string filtered_recomb_file, std::ofstream &outfile,
-                       std::vector<std::string> header_list);
+std::vector<std::string> get_recombination_info(
+    MAT::Tree &T, std::string tree_date,
+    std::unordered_map<std::string, std::string> &node_to_inferred_date,
+    std::string filtered_recomb_file, std::ofstream &outfile,
+    std::vector<std::string> &header_list);
 
 void get_recombination_info_using_descendants(
     MAT::Tree &T, std::string tree_date, std::string filtered_recomb_file,
     std::unordered_map<std::string, std::string> &descendant_to_date,
-    std::ofstream &outfile, std::vector<std::string> header_list);
+    std::ofstream &outfile, std::vector<std::string> &header_list);
 
 void chron_id_mapping(MAT::Tree &T,
                       std::unordered_map<std::string, std::string> &id_map);
 
 void tsv_to_dict(std::string tsv_file,
-                 std::unordered_map<std::string, std::string> &map,
-                 int key_col, int val_col, bool header);
+                 std::unordered_map<std::string, std::string> &map, int key_col,
+                 int val_col, bool header);
 
 inline float recombinant_rank(int days, int num_descendants) noexcept {
     return static_cast<float>(num_descendants) / days;
@@ -83,7 +82,7 @@ void internal_node_msa(MAT::Tree T, std::string sample_paths,
 std::string find_representative_sample(MAT::Tree &T,
                                        std::string internal_node_id);
 
-void get_node_descendants(MAT::Tree &T, std::string internal_node_id,
-                          std::vector<std::string> &descendants, int max_desc);
+std::vector<std::string>
+get_node_descendants(MAT::Tree &T, std::string internal_node_id, int max_desc);
 
 #endif

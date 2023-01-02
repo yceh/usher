@@ -64,6 +64,7 @@ void write_recombination_list(
     // Add header for outfile
     for (std::vector<std::string>::iterator it = header_list.begin();
          it != header_list.end(); ++it) {
+        std::cout << *it << "\n";
         if (it == std::prev(header_list.end())) {
             outfile << *it << "\n";
             break;
@@ -122,25 +123,21 @@ void write_recombination_list(
                       << "\n";
             exit(1);
         }
+        //  Write descendants to sample_descendants.tsv out file
+        std::vector<std::string> nodes = {r.recomb_node_id, r.donor_node_id,
+                                          r.acceptor_node_id};
 
-        // Write descendants to sample_descendants.tsv out file
-        std::vector<std::string> recomb_capped_descendants;
-        recomb_capped_descendants.reserve(10000);
-        get_node_descendants(T, rr.recomb_node_id, recomb_capped_descendants,
-                             10000);
-
-        descendants_outfile << rr.recomb_node_id << "\t";
-
-        if (recomb_capped_descendants.size() != 0) {
-            for (const auto &d : recomb_capped_descendants) {
-                if (d != recomb_capped_descendants.back()) {
-                    descendants_outfile << d << ", ";
-                } else {
-                    descendants_outfile << d << "\t";
-                }
-            }
+        for (auto &n : nodes) {
+            // Get all node descendants, no max
+            auto descendants = T.get_leaves_ids(n);
+            auto descendants_csl = boost::algorithm::join(descendants, ", ");
+            // 1st Column: node_id
+            descendants_outfile << n << "\t";
+            // 2nd column: comma separated list of descendants for node_id
+            descendants_outfile << descendants_csl << "\t";
+            // 3rd column: descendant count for node_id
+            descendants_outfile << descendants.size() << "\n";
         }
-        descendants_outfile << recomb_capped_descendants.size() << "\n";
 
         // Get recomb clade (nextstrain) and lineage (pangolin designation)
         auto recomb_clade = T.get_clade_assignment(recomb, 0);
@@ -221,12 +218,11 @@ void write_recombination_list(
     descendants_outfile.close();
 }
 
-std::vector<std::string>
-get_recombination_info(MAT::Tree &T, std::string tree_date,
-                       std::unordered_map<std::string, std::string>
-                           &node_to_inferred_date,
-                       std::string filtered_recomb_file, std::ofstream &outfile,
-                       std::vector<std::string> header_list) {
+std::vector<std::string> get_recombination_info(
+    MAT::Tree &T, std::string tree_date,
+    std::unordered_map<std::string, std::string> &node_to_inferred_date,
+    std::string filtered_recomb_file, std::ofstream &outfile,
+    std::vector<std::string> &header_list) {
 
     std::cout << "Opening results file: " << filtered_recomb_file << "\n";
     text_parser results(filtered_recomb_file);
@@ -278,7 +274,8 @@ get_recombination_info(MAT::Tree &T, std::string tree_date,
         // Record acceptor node id
         trio_node_ids.push_back(acceptor_id);
 
-        // Record donor/acceptor node ids for ranking
+        // Record recomb/donor/acceptor node ids for ranking
+        r.recomb_node_id = recomb_id;
         r.donor_node_id = donor_id;
         r.acceptor_node_id = acceptor_id;
 
@@ -286,7 +283,7 @@ get_recombination_info(MAT::Tree &T, std::string tree_date,
         // which is at column 16
         r.informative_seq = std::string{results.get_value(16)};
         // Get informative site positions from filtration results file,
-        r.informative_position=std::string{results.get_value(15)};
+        r.informative_position = std::string{results.get_value(15)};
         // Get 3SEQ M, N, K values from filtration results file
         std::string mnk_values = "(";
         mnk_values += std::string{results.get_value(17)} + ", ";
@@ -347,7 +344,7 @@ get_recombination_info(MAT::Tree &T, std::string tree_date,
 void get_recombination_info_using_descendants(
     MAT::Tree &T, std::string tree_date, std::string filtered_recomb_file,
     std::unordered_map<std::string, std::string> &descendant_to_date,
-    std::ofstream &outfile, std::vector<std::string> header_list) {
+    std::ofstream &outfile, std::vector<std::string> &header_list) {
 
     std::cout << "Opening results file: " << filtered_recomb_file << "\n";
     text_parser results(filtered_recomb_file);
@@ -381,6 +378,7 @@ void get_recombination_info_using_descendants(
         if (std::isdigit(acceptor_id.at(0)) == 1) {
             acceptor_id = "node_" + acceptor_id;
         }
+        r.recomb_node_id = recomb_id;
         r.donor_node_id = donor_id;
         r.acceptor_node_id = acceptor_id;
 
@@ -407,7 +405,7 @@ void get_recombination_info_using_descendants(
         int earliest_days = 0;
         std::string earliest_descendant = "";
         for (auto node : descendants_vec) {
-            const std::string& n=node->identifier;
+            const std::string &n = node->identifier;
             if (descendant_to_date[n].size() != 10) {
                 continue;
             }
@@ -425,7 +423,8 @@ void get_recombination_info_using_descendants(
         auto recomb_rank =
             recombinant_rank(earliest_days, recomb_num_descendants);
 
-				//TODO: Might still want to report this recombinant, list N/A in rank field?
+        // TODO: Might still want to report this recombinant, list N/A in rank
+        // field?
         if (recomb_rank == 0.0) {
             // Move to next recombinant, incomplete date information for
             // this recombinant node, for all node descendants in metadata
@@ -487,8 +486,8 @@ void chron_id_mapping(MAT::Tree &T,
 //  Extract two columns from a TSV file to act as dictionary,
 //  one as key, the other as value
 void tsv_to_dict(std::string tsv_file,
-                 std::unordered_map<std::string, std::string> &map,
-                 int key_col, int val_col, bool header) {
+                 std::unordered_map<std::string, std::string> &map, int key_col,
+                 int val_col, bool header) {
     text_parser file_handle(tsv_file);
 
     // If file has header, skip over first header line
@@ -500,7 +499,7 @@ void tsv_to_dict(std::string tsv_file,
     for (; !file_handle.done(); file_handle.next_line()) {
         std::string_view key = file_handle.get_value(key_col);
         std::string_view value = file_handle.get_value(val_col);
-        map.insert({std::string(key),std::string(value)});
+        map.insert({std::string(key), std::string(value)});
     }
 }
 
@@ -536,9 +535,11 @@ std::string find_representative_sample(MAT::Tree &T,
     return rep_samples[0].node_id;
 }
 
+std::vector<std::string>
+get_node_descendants(MAT::Tree &T, std::string internal_node_id, int max_desc) {
 
-void get_node_descendants(MAT::Tree &T, std::string internal_node_id,
-                          std::vector<std::string> &descendants, int max_desc) {
+    std::vector<std::string> descendants;
+    descendants.reserve(10000);
 
     // Get internal node
     MAT::Node *internal_node = T.get_node(internal_node_id);
@@ -554,5 +555,5 @@ void get_node_descendants(MAT::Tree &T, std::string internal_node_id,
         descendants.push_back(d->identifier);
         ++i;
     }
-    return;
+    return descendants;
 }

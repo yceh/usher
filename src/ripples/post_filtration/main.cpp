@@ -87,7 +87,7 @@ int main(int argc, char **argv) {
                                             "Donor Lineage",
                                             "Acceptor Clade",
                                             "Acceptor Lineage",
-                                            "Descendant",
+                                            "Representative Descendant",
                                             "Informative Site Sequence",
                                             "3SEQ (M, N, K)",
                                             "3SEQ P-Value",
