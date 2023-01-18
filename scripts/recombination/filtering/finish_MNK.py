@@ -92,10 +92,15 @@ def combinePValueFiles():
 
 def addInfSites():
     finalReportTrios = {}
-    with open('filtering/data/final_report.txt') as f:
+    with open('filtering/data/pass.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
             finalReportTrios[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = True
+    filtered_trios={}
+    with open('filtering/data/fail.txt') as f:
+        for line in f:
+            splitLine = (line.strip()).split('\t')
+            finalReportTrios[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = str(splitLine[3])
 
     trioToInfSites = {}
     with open('filtering/data/allRelevantNodesInfSites.txt') as f:
@@ -108,16 +113,49 @@ def addInfSites():
         for line in f:
             splitLine = (line.strip()).split('\t')
             trioToInfSeq[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = splitLine[7]
+    trioTo3P = {}
+    field_len_3P=0
+    with open('filtering/data/allRelevantNodesMNKPval.txt') as f:
+        line=next(f)
+        splitLine = (line.strip()).split('\t')
+        trioTo3P[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = splitLine[8:]
+        field_len_3P=len(splitLine[8:])
+        for line in f:
+            splitLine = (line.strip()).split('\t')
+            trioTo3P[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = splitLine[8:]
 
-    myOutString = ''
+    filtered_out_fh=open("filtering/data/filtered_out.txt","w")
+    pass_out_fh=open("filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSites.txt","w")
     with open('filtering/data/combinedCatOnlyBestWithPVals.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
-            if str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6]) in trioToInfSites and str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6]) in finalReportTrios:
-                splitLine.append(trioToInfSites[str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6])])
-                splitLine.append(trioToInfSeq[str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6])])
-                myOutString += joiner(splitLine)+'\n'
-    open('filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSites.txt','w').write(myOutString)
+            trio_id=str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6])
+            if trio_id in trioToInfSites and trio_id in finalReportTrios:
+                splitLine.append(trioToInfSites[trio_id])
+                splitLine.append(trioToInfSeq[trio_id])
+                splitLine+=trioTo3P[trio_id]
+                pass_out_fh.write(joiner(splitLine)+'\n')
+            else:
+                if trio_id in trioToInfSites:
+                    splitLine.append(trioToInfSites[trio_id])
+                else:
+                    splitLine.append("NA")
+                if trio_id in trioToInfSeq:
+                    splitLine.append(trioToInfSeq[trio_id])
+                else:
+                    splitLine.append("NA")
+                if trio_id in trioTo3P:
+                    splitLine+=trioTo3P[trio_id]
+                else:
+                    splitLine+=field_len_3P*["NA"]
+                if trio_id in filtered_trios:
+                    splitLine+=filtered_trios[trio_id]
+                else:
+                    splitLine+="fail"
+                filtered_out_fh.write(joiner(splitLine)+'\n')
+    filtered_out_fh.close()
+    pass_out_fh.close()
+    
 
 
 

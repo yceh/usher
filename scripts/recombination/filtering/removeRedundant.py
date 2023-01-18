@@ -72,9 +72,12 @@ def removeRedundantTrios():
                             print(myTrios[i], myTrios[j], trioToPVal[joinerU(myTrios[i])])
 
     myOutString = ''
+    filtered_out_fh=open("filtering/data/filtered_out.txt","a")
     for t in trioToLine:
         if not t in toRemove:
             myOutString += joiner(trioToLine[t])+'\n'
+        else:
+            filtered_out_fh.write(joiner(trioToLine[t]+["redundant,"])+'\n')
     #open('results/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClustersNewTiebreak3seqP02RussPval005RemoveCircular.txt','w').write(myOutString)
     open('results/filtered_recombinants.txt','w').write(myOutString)
 
