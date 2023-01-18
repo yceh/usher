@@ -100,7 +100,7 @@ def addInfSites():
     with open('filtering/data/fail.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
-            finalReportTrios[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = str(splitLine[3])
+            filtered_trios[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = str(splitLine[3])
 
     trioToInfSites = {}
     with open('filtering/data/allRelevantNodesInfSites.txt') as f:
@@ -128,6 +128,8 @@ def addInfSites():
     pass_out_fh=open("filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSites.txt","w")
     with open('filtering/data/combinedCatOnlyBestWithPVals.txt') as f:
         for line in f:
+            if line.startswith("#"):
+                continue
             splitLine = (line.strip()).split('\t')
             trio_id=str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6])
             if trio_id in trioToInfSites and trio_id in finalReportTrios:
@@ -149,9 +151,9 @@ def addInfSites():
                 else:
                     splitLine+=field_len_3P*["NA"]
                 if trio_id in filtered_trios:
-                    splitLine+=filtered_trios[trio_id]
+                    splitLine.append(filtered_trios[trio_id])
                 else:
-                    splitLine+="fail"
+                    splitLine.append("fail")
                 filtered_out_fh.write(joiner(splitLine)+'\n')
     filtered_out_fh.close()
     pass_out_fh.close()
