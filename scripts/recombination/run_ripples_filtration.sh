@@ -68,8 +68,7 @@ comm -23 \
  | awk '{ print $0 "\tAlt,"}' >> filtering/data/filtered_out.txt
 python3 filtering/removeRedundant.py   
 # Copy detected and filtered recombination to GCP Storage
+cat filtering/data/filtered_out.txt >> results/filtered_recombinants.txt
 gsutil cp results/filtered_recombinants.txt $results/$out
-gsutil cp filtering/data/filtered_out.txt $results/$out
-
 
 echo "Pipeline finished. List of recombinants detected in 'results/' directory."
