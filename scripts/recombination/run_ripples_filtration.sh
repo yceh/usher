@@ -59,13 +59,17 @@ awk '{filter="";
         print > "filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters3seqP02RussPval005.txt";
     else
         print $0 "\t" filter >> "filtering/data/filtered_out.txt";
-     ' filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters.txt > filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters3SeqP02.txt  
+    }' filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters.txt
 
 python3 filtering/doNewTieBreakers.py 
-
+comm -23 \
+ <(sort filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters3seqP02RussPval005.txt) \
+<(sort filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClustersNewTiebreak3seqP02RussPval005.txt ) \
+ | awk '{ print $0 "\tAlt,"}' >> filtering/data/filtered_out.txt
 python3 filtering/removeRedundant.py   
 # Copy detected and filtered recombination to GCP Storage
 gsutil cp results/filtered_recombinants.txt $results/$out
+gsutil cp filtering/data/filtered_out.txt $results/$out
 
 
 echo "Pipeline finished. List of recombinants detected in 'results/' directory."

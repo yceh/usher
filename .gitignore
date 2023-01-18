@@ -16,3 +16,12 @@ test_data
 a.out
 .clangd
 profile_heaps
+**/*log
+**/*stdout
+**/*stderr
+**/*.pb.gz
+scripts/recombination/filtering/data
+scripts/recombination/filtering/fastas
+scripts/recombination/filtering/old_data
+scripts/recombination/results*
+**/reference.fa
