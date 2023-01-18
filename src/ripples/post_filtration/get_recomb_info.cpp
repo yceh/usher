@@ -61,7 +61,7 @@ int elapsed_days(std::string tree_date,
 }
 static void write_single_recomb(std::ofstream &outfile,const Recombinant& r,
     std::unordered_set<std::string> internal_nodes,MAT::Tree& T,std::ofstream& descendants_outfile
-    ,std::ofstream& samples_outfile, int recomb_rank
+    ,std::ofstream& samples_outfile, float recomb_rank
 ){
         outfile << r.recomb_node_id << "\t";
 
@@ -222,7 +222,7 @@ void write_recombination_list(
         write_single_recomb(outfile, r, internal_nodes, T, descendants_outfile, samples_outfile, rr.recomb_rank);
     }
     for (const auto& r : filtered_out_recombs) {
-        write_single_recomb(outfile, r, internal_nodes, T, descendants_outfile, samples_outfile, ranked_recombs.size()+10);
+        write_single_recomb(outfile, r, internal_nodes, T, descendants_outfile, samples_outfile, 0);
     }
     outfile.close();
     samples_outfile.close();
