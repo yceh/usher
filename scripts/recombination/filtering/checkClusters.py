@@ -17,11 +17,6 @@ import re
 ##########################
 
 def checkClusters():
-    trioTo3P = {}
-    with open('filtering/data/allRelevantNodesMNKPval.txt') as f:
-        for line in f:
-            splitLine = (line.strip()).split('\t')
-            trioTo3P[str(splitLine[0])+'_'+str(splitLine[1])+'_'+str(splitLine[2])] = splitLine[8:]
 
     goodTrios = {}
     with open('filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSites.txt') as f:
@@ -34,6 +29,7 @@ def checkClusters():
     bp2 = {}
     myOKs = {28881:True,28882:True,28883:True,28280:True,28281:True,28282:True}
     counter = 0
+    filtered_out_fh=open("filtering/data/filtered_out.txt","a")
     with open('filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSites.txt') as f:
         for line in f:
             splitLine = (line.strip()).split('\t')
@@ -50,11 +46,13 @@ def checkClusters():
                 elif mySeq[i] == 'B':
                     myB.append(mySites[i])
             if max(myA)-min(myA) > 20 and max(myB)-min(myB) > 20:
-                myOutString += line.strip()+'\t'+joiner(trioTo3P[myTrio])+'\n'
+                myOutString += line
                 if myStart == 0 or myEnd == 29903:
                     bp1[splitLine[0]] = True
                 else:
                     bp2[splitLine[0]] = True
+            else:
+                filtered_out_fh.write(line.strip()+"\tcluster,\n")
 
             if str(splitLine[0])+'_'+str(splitLine[3])+'_'+str(splitLine[6]) in goodTrios:
                 counter += 1
@@ -67,6 +65,7 @@ def checkClusters():
     print(len(bp1),len(bp2))
     print(counter)
     open('filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters.txt','w').write(myOutString)
+    filtered_out_fh.close()
 
 
 ##########################

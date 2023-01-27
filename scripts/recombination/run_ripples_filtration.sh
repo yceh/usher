@@ -50,13 +50,25 @@ echo "mnk.log output from 3seq program written to recombination/filtering/data"
 python3 filtering/finish_MNK.py
 
 python3 filtering/checkClusters.py  
-awk '$21 <= .20 {print}' filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters.txt > filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters3SeqP02.txt  
+awk '{filter=""; 
+    if( $21>0.2) filter="3SeqP02,";
+    russPval_start=substr($14,1,2);
+    if( russPval_start!="0/" && russPval_start!="NA" && $14 >= 0.05 )
+        filter= ( filter "russPval005,") ;
+    if(filter=="")
+        print > "filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters3seqP02RussPval005.txt";
+    else
+        print $0 "\t" filter >> "filtering/data/filtered_out.txt";
+    }' filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters.txt
 
 python3 filtering/doNewTieBreakers.py 
-
+comm -23 \
+ <(sort filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClusters3seqP02RussPval005.txt) \
+<(sort filtering/data/combinedCatOnlyBestWithPValsFinalReportWithInfSitesNoClustersNewTiebreak3seqP02RussPval005.txt ) \
+ | awk '{ print $0 "\tAlt,"}' >> filtering/data/filtered_out.txt
 python3 filtering/removeRedundant.py   
 # Copy detected and filtered recombination to GCP Storage
+cat filtering/data/filtered_out.txt >> results/filtered_recombinants.txt
 gsutil cp results/filtered_recombinants.txt $results/$out
-
 
 echo "Pipeline finished. List of recombinants detected in 'results/' directory."

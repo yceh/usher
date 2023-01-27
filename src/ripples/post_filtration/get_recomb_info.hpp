@@ -20,8 +20,8 @@ struct Recombinant {
     std::string descendants;
     std::tuple<std::string, std::string>
         breakpoint_intervals; // Breakpoint interval <1,2>
-
-    Recombinant(std::string recomb_node_id) { recomb_node_id = recomb_node_id; }
+    std::string filter;
+    Recombinant(std::string recomb_node_id) :recomb_node_id(recomb_node_id){} 
 };
 
 struct Ranked_Recombinant {
@@ -44,7 +44,7 @@ struct RepresentativeSample {
 void write_recombination_list(
     MAT::Tree &T, std::unordered_map<std::string, Recombinant> &recombinants,
     std::vector<Ranked_Recombinant> &ranked_recombs, std::ofstream &outfile,
-    std::vector<std::string> &header_list);
+    std::vector<std::string> &header_list,std::vector<Recombinant>& filtered_out_recombs);
 
 std::vector<std::string> get_recombination_info(
     MAT::Tree &T, std::string tree_date,

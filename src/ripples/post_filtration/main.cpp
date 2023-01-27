@@ -94,7 +94,8 @@ int main(int argc, char **argv) {
                                             "Recombinant Ranking Score",
                                             "Original Parsimony Score",
                                             "Parsimony Score Improvement",
-                                            "Informative Site Positions"
+                                            "Informative Site Positions",
+                                            "Filter"
                                             };
 
     std::vector<std::string> trio_node_ids;

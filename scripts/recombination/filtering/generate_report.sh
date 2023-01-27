@@ -42,5 +42,11 @@ sleep 1
 ls filtering/fastas/AlignedRecombs | parallel -j $core_less_one python3 filtering/checkmutant.py {.} -r
 } &> check_mutant_log
 
-awk '$19 == "False"' filtering/data/report.txt | awk '$14 == "False"' | awk '$11 == "False"' > filtering/data/final_report.txt
+pushd filtering/data
+awk ' BEGIN {OFS="\t"} {filter=""; 
+    if ($11 != "False") filter= "Too_many_mutations_near_INDELs,"; 
+    if ($14 != "False") filter= ( filter  "Suspicious_mutation_clump,"); 
+    if ($19 != "False") filter= ( filter "Site_of_informative_sites_clump_INDEL_in_wrong_region,"); 
+    if (filter=="") print $1,$2,$3 >"pass.txt"; else print $1,$2,$3,filter >"fail.txt" }' report.txt
+popd
 echo "DONE"

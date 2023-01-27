@@ -223,7 +223,6 @@ def joiner(entry):
 #########################
 
 def main():
-    applyPval()
     doNewTiebreakers()
 
 if __name__ == "__main__":
