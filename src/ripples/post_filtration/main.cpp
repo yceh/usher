@@ -91,12 +91,12 @@ int main(int argc, char **argv) {
                                             "Informative Site Sequence",
                                             "3SEQ (M, N, K)",
                                             "3SEQ P-Value",
+                                            "Chronumental-inferred origin date",
                                             "Recombinant Ranking Score",
                                             "Original Parsimony Score",
                                             "Parsimony Score Improvement",
                                             "Informative Site Positions",
-                                            "Filter"
-                                            };
+                                            "Filter"};
 
     std::vector<std::string> trio_node_ids;
 
@@ -108,8 +108,7 @@ int main(int argc, char **argv) {
                   << "\n";
 
         // Load inferred dates for internal nodes from Chronumental output
-        std::unordered_map<std::string, std::string>
-            node_to_inferred_date;
+        std::unordered_map<std::string, std::string> node_to_inferred_date;
         node_to_inferred_date.reserve(num_leaves);
 
         tsv_to_dict(chron_dates_file, node_to_inferred_date, 0, 1, true);
@@ -142,8 +141,7 @@ int main(int argc, char **argv) {
                   << "\n";
 
         // Load MAT metadata into dictionary to get dates for descendants
-        std::unordered_map<std::string, std::string>
-            descendant_to_date;
+        std::unordered_map<std::string, std::string> descendant_to_date;
         descendant_to_date.reserve(num_leaves);
         tsv_to_dict(metadata_file, descendant_to_date, 0, 2, true);
 

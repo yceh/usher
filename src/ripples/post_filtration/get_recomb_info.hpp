@@ -3,6 +3,7 @@
 
 #include "src/mutation_annotated_tree.hpp"
 #include "src/ripples/util/text_parser.hpp"
+#include <math.h>
 
 namespace MAT = Mutation_Annotated_Tree;
 
@@ -17,6 +18,7 @@ struct Recombinant {
     std::string informative_position; // eg) "1,2,..."
     std::string mnk_3seq_values;      // eg) "(M,N,K)"
     std::string p_value_3seq;
+		std::string inferred_date;
     std::string descendants;
     std::tuple<std::string, std::string>
         breakpoint_intervals; // Breakpoint interval <1,2>
@@ -64,8 +66,8 @@ void tsv_to_dict(std::string tsv_file,
                  std::unordered_map<std::string, std::string> &map, int key_col,
                  int val_col, bool header);
 
-inline float recombinant_rank(int days, int num_descendants) noexcept {
-    return static_cast<float>(num_descendants) / days;
+inline float recombinant_rank(int days, int num_descendants, int weight) noexcept {
+    return (static_cast<float>(num_descendants) / days) * pow(2, -weight);
 }
 
 int elapsed_days(std::string tree_date,
