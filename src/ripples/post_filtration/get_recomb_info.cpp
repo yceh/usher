@@ -186,10 +186,9 @@ static void write_single_recomb(std::ofstream &outfile, const Recombinant &r,
     outfile << r.filter << "\n";
 }
 void write_recombination_list(
-    MAT::Tree &T, std::unordered_map<std::string, Recombinant> &recombinants,
+    MAT::Tree &T, std::vector<Recombinant> &recombinants,
     std::vector<Ranked_Recombinant> &ranked_recombs, std::ofstream &outfile,
-    std::vector<std::string> &header_list,
-    std::vector<Recombinant> &filtered_out_recombs) {
+    std::vector<std::string> &header_list) {
 
     // Add header for outfile
     for (std::vector<std::string>::iterator it = header_list.begin();
@@ -235,18 +234,11 @@ void write_recombination_list(
 
     for (const auto &rr : ranked_recombs) {
         // Get the Recombinant node and write
-        Recombinant r = recombinants.at(rr.recomb_node_id);
+        Recombinant r = recombinants[rr.id];
         write_single_recomb(outfile, r, internal_nodes, T,  rr.recomb_rank);
     }
-    write_descendants(internal_nodes, T, descendants_outfile, samples_outfile);
-    /*
-    for (const auto &r : filtered_out_recombs) {
-        write_single_recomb(outfile, r, internal_nodes, T, descendants_outfile,
-                          samples_outfile, 0);
-    }
-    */
-
     outfile.close();
+    write_descendants(internal_nodes, T, descendants_outfile, samples_outfile);
     samples_outfile.close();
     boost::iostreams::close(outbuf);
     descendants_outfile_raw.close();
@@ -319,19 +311,11 @@ std::vector<std::string> get_recombination_info(
     std::vector<std::string> trio_node_ids;
 
     // Keep track of all recomb_node_ids and their associated rank
-    std::unordered_map<std::string, Recombinant> recombinants;
+    std::vector<Recombinant> recombinants;
     std::vector<Ranked_Recombinant> ranked_recombs;
-    std::vector<Recombinant> filtered_out_recombs;
     // Get each detected recombinant node from filtration pipeline output
     for (; !results.done(); results.next_line()) {
         auto r = parse_recomb(results);
-
-        /*
-        if (r.filter != "PASS") {
-           filtered_out_recombs.emplace_back(std::move(r));
-           continue;
-        }
-        */
 
         // Record recombinant node id
         trio_node_ids.push_back(r.recomb_node_id);
@@ -360,7 +344,7 @@ std::vector<std::string> get_recombination_info(
         // Calculate number of elapsed days since input tree date
         int days = elapsed_days(tree_date, inferred_recomb_date);
 
-        Ranked_Recombinant rr = Ranked_Recombinant(r.recomb_node_id);
+        Ranked_Recombinant rr = Ranked_Recombinant(recombinants.size());
         // Weight sequence by recency
         auto weight = [](const int days) {
             int weight = 0;
@@ -377,7 +361,7 @@ std::vector<std::string> get_recombination_info(
         rr.recomb_rank = recomb_rank;
         // Add recombination information to collection of detected
         // recombinants
-        recombinants.insert({r.recomb_node_id, r});
+        recombinants.push_back(r);
 
         // Keep track of rank score for each detected recombinant
         ranked_recombs.push_back(rr);
@@ -390,7 +374,7 @@ std::vector<std::string> get_recombination_info(
 
     // Write all final recombinants to output file, in ranked order
     write_recombination_list(T, recombinants, ranked_recombs, outfile,
-                             header_list, filtered_out_recombs);
+                             header_list);
 
     return trio_node_ids;
 }
@@ -404,17 +388,12 @@ void get_recombination_info_using_descendants(
     text_parser results(filtered_recomb_file);
 
     // Keep track of all recomb_node_ids and their associated rank
-    std::unordered_map<std::string, Recombinant> recombinants;
+    std::vector<Recombinant> recombinants;
     std::vector<Ranked_Recombinant> ranked_recombs;
-    std::vector<Recombinant> filtered_out_recombs;
     // Get each detected recombinant node from filtration pipeline output
     for (; !results.done(); results.next_line()) {
 
         Recombinant r = parse_recomb(results);
-        if (r.filter != "PASS") {
-            filtered_out_recombs.emplace_back(std::move(r));
-            continue;
-        }
         auto recomb = T.get_node(r.recomb_node_id);
         if (recomb == NULL) {
             std::cout << "Recomb node is NULL, not finding recomb node id"
@@ -458,7 +437,7 @@ void get_recombination_info_using_descendants(
             return weight;
         };
 
-        Ranked_Recombinant rr = Ranked_Recombinant(r.recomb_node_id);
+        Ranked_Recombinant rr = Ranked_Recombinant(recombinants.size());
         // Generate recombinant ranking score, using earliest date from set
         // of recomb node descendants
         auto recomb_rank = recombinant_rank(
@@ -475,7 +454,7 @@ void get_recombination_info_using_descendants(
         rr.recomb_rank = recomb_rank;
         // Add recombination information to collection of detected
         // recombinants
-        recombinants.insert({r.recomb_node_id, r});
+        recombinants.push_back(r);
 
         // Keep track of rank score for each detected recombinant
         ranked_recombs.push_back(rr);
@@ -488,7 +467,7 @@ void get_recombination_info_using_descendants(
 
     // Write all final recombinants to output file, in ranked order
     write_recombination_list(T, recombinants, ranked_recombs, outfile,
-                             header_list, filtered_out_recombs);
+                             header_list);
 }
 
 // Same preorder traversal as Chronumental performs to map
