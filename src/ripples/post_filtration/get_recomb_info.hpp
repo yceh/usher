@@ -3,6 +3,7 @@
 
 #include "src/mutation_annotated_tree.hpp"
 #include "src/ripples/util/text_parser.hpp"
+#include <cstddef>
 #include <math.h>
 
 namespace MAT = Mutation_Annotated_Tree;
@@ -28,9 +29,9 @@ struct Recombinant {
 
 struct Ranked_Recombinant {
     float recomb_rank;
-    std::string recomb_node_id;
+    size_t id;
 
-    Ranked_Recombinant(std::string id) { recomb_node_id = id; }
+    Ranked_Recombinant(size_t id):id(id){}
 };
 
 struct RepresentativeSample {
